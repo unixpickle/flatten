@@ -128,16 +128,20 @@ class App {
     }
 
     pixelSource() {
+        const scale = Math.max(
+            this._img.width / this.canvas.width,
+            this._img.height / this.canvas.height,
+        );
         const extractionCanvas = document.createElement('canvas');
-        extractionCanvas.width = this.canvas.width;
-        extractionCanvas.height = this.canvas.height;
+        extractionCanvas.width = this.canvas.width * scale;
+        extractionCanvas.height = this.canvas.height * scale;
         const ctx = extractionCanvas.getContext('2d');
         ctx.drawImage(
             this._img,
-            this._offsetX,
-            this._offsetY,
-            this._scale * this._img.width,
-            this._scale * this._img.height,
+            this._offsetX * scale,
+            this._offsetY * scale,
+            this._scale * this._img.width * scale,
+            this._scale * this._img.height * scale,
         );
 
         const data = ctx.getImageData(0, 0, extractionCanvas.width, extractionCanvas.height);
