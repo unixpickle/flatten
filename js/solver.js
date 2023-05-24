@@ -3,24 +3,22 @@ class Point2 {
         this.x = x;
         this.y = y;
     }
+
+    dist(other) {
+        return Math.sqrt(Math.pow(other.x - this.x, 2) + Math.pow(other.y - this.y, 2));
+    }
 }
 
 class Solution {
-    constructor(rotX, rotY, rotZ, camX, camY, camZ, p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
+    constructor(rotX, rotY, rotZ, camX, camY, camZ, width, height) {
         this.rotX = rotX;
         this.rotY = rotY;
         this.rotZ = rotZ;
         this.camX = camX;
         this.camY = camY;
         this.camZ = camZ;
-        this.p1x = p1x;
-        this.p1y = p1y;
-        this.p2x = p2x;
-        this.p2y = p2y;
-        this.p3x = p3x;
-        this.p3y = p3y;
-        this.p4x = p4x;
-        this.p4y = p4y;
+        this.width = width;
+        this.height = height;
     }
 
     addScaled(gradient, scale) {
@@ -31,14 +29,8 @@ class Solution {
             this.camX + scale * gradient.camX,
             this.camY + scale * gradient.camY,
             this.camZ + scale * gradient.camZ,
-            this.p1x + scale * gradient.p1x,
-            this.p1y + scale * gradient.p1y,
-            this.p2x + scale * gradient.p2x,
-            this.p2y + scale * gradient.p2y,
-            this.p3x + scale * gradient.p3x,
-            this.p3y + scale * gradient.p3y,
-            this.p4x + scale * gradient.p4x,
-            this.p4y + scale * gradient.p4y,
+            this.width + scale * gradient.width,
+            this.height + scale * gradient.height,
         );
     }
 }
@@ -94,15 +86,13 @@ class Solver {
     constructor(corners) {
         this.corners = corners;
         this.solution = new Solution(
-            0, 0, 0, 0, 0, -1.0,
-            corners[0].x,
-            corners[0].y,
-            corners[1].x,
-            corners[1].y,
-            corners[2].x,
-            corners[2].y,
-            corners[3].x,
-            corners[3].y,
+            // Rotations
+            0, 0, 0,
+            // Origin
+            0, 0, -1.0,
+            // Width and height
+            corners[1].dist(corners[0]),
+            corners[3].dist(corners[0]),
         );
     }
 
@@ -131,21 +121,7 @@ class Solver {
             projMSE = projMSE.add(diff.dot(diff));
         });
 
-        const cornerVecs = points.map((c1, i) => {
-            const c2 = points[(i + 1) % points.length];
-            return c2.sub(c1).normalize();
-        });
-
-        let sqDotSum = camera.constant(0);
-        for (let i = 0; i < cornerVecs.length; i++) {
-            const v1 = cornerVecs[i]
-            const v2 = cornerVecs[(i + 1) % cornerVecs.length];
-            sqDotSum = sqDotSum.add(v1.dot(v2).pow(2));
-        }
-
-        let loss = sqDotSum.scale(0.01).add(projMSE);
-
-        return [new Solution(...loss.derivatives), loss];
+        return [new Solution(...projMSE.derivatives), projMSE.value];
     }
 
     cameraAndPoints() {
@@ -164,29 +140,25 @@ class Solver {
             this.solution.camX,
             this.solution.camY,
             this.solution.camZ,
-            this.solution.p1x,
-            this.solution.p1y,
-            this.solution.p2x,
-            this.solution.p2y,
-            this.solution.p3x,
-            this.solution.p3y,
-            this.solution.p4x,
-            this.solution.p4y,
+            this.solution.width,
+            this.solution.height,
         );
     }
 
     _cameraAndPoints(vars) {
-        const [rotX, rotY, rotZ, camX, camY, camZ, p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y] = vars;
+        const [rotX, rotY, rotZ, camX, camY, camZ, width, height] = vars;
         const rotation = Matrix3.eulerRotation(rotX, rotY, rotZ);
         const camOrigin = new Vector3(camX, camY, camZ);
-        const zero = p1x.constant(0);
+        const zero = rotX.constant(0);
+        const x1 = rotX.constant(this.corners[0].x);
+        const y1 = rotX.constant(this.corners[0].y);
         return [
             new Camera(rotation, camOrigin),
             [
-                new Vector3(p1x, p1y, zero),
-                new Vector3(p2x, p2y, zero),
-                new Vector3(p3x, p3y, zero),
-                new Vector3(p4x, p4y, zero),
+                new Vector3(x1, y1, zero),
+                new Vector3(x1.add(width), y1, zero),
+                new Vector3(x1.add(width), y1.add(height), zero),
+                new Vector3(x1, y1.add(height), zero),
             ],
         ];
     }
