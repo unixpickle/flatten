@@ -126,6 +126,10 @@ class Vector3 {
         this.z = z;
     }
 
+    scale(x) {
+        return new Vector3(this.x.mul(x), this.y.mul(x), this.z.mul(x));
+    }
+
     add(other) {
         return new Vector3(
             this.x.add(other.x),
@@ -140,6 +144,18 @@ class Vector3 {
             this.y.sub(other.y),
             this.z.sub(other.z),
         )
+    }
+
+    dot(other) {
+        return this.x.mul(other.x).add(this.y.mul(other.y)).add(this.z.mul(other.z));
+    }
+
+    norm() {
+        return this.x.pow(2).add(this.y.pow(2)).add(this.z.pow(2)).pow(0.5);
+    }
+
+    normalize() {
+        return this.scale(this.norm().pow(-1));
     }
 }
 

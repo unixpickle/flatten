@@ -6,13 +6,21 @@ class Point2 {
 }
 
 class Solution {
-    constructor(rotX, rotY, rotZ, camX, camY, camZ) {
+    constructor(rotX, rotY, rotZ, camX, camY, camZ, p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
         this.rotX = rotX;
         this.rotY = rotY;
         this.rotZ = rotZ;
         this.camX = camX;
         this.camY = camY;
         this.camZ = camZ;
+        this.p1x = p1x;
+        this.p1y = p1y;
+        this.p2x = p2x;
+        this.p2y = p2y;
+        this.p3x = p3x;
+        this.p3y = p3y;
+        this.p4x = p4x;
+        this.p4y = p4y;
     }
 
     addScaled(gradient, scale) {
@@ -23,6 +31,14 @@ class Solution {
             this.camX + scale * gradient.camX,
             this.camY + scale * gradient.camY,
             this.camZ + scale * gradient.camZ,
+            this.p1x + scale * gradient.p1x,
+            this.p1y + scale * gradient.p1y,
+            this.p2x + scale * gradient.p2x,
+            this.p2y + scale * gradient.p2y,
+            this.p3x + scale * gradient.p3x,
+            this.p3y + scale * gradient.p3y,
+            this.p4x + scale * gradient.p4x,
+            this.p4y + scale * gradient.p4y,
         );
     }
 }
@@ -49,36 +65,45 @@ class Camera {
 }
 
 class SolutionMap {
-    constructor(camera, projCorners) {
-        const v1 = projCorners[1].sub(projCorners[0]);
-        const v2 = projCorners[3].sub(projCorners[0]);
+    constructor(camera, points) {
+        const v1 = points[1].sub(points[0]);
+        const v2 = points[3].sub(points[0]);
+
         this._camera = camera;
-        this._origin = projCorners[0];
+        this._origin = points[0];
         this._x = v1.normalize();
         this._y = v2.normalize();
         this.width = v1.norm().value;
         this.height = v2.norm().value;
     }
 
-    destPoint(source) {
-        const proj = this._camera.project(
-            new Vector3(
-                this._camera.constant(source.x),
-                this._camera.constant(source.y),
-                this._camera.constant(0),
-            ),
-        ).sub(this._origin);
-        return new Point2(
-            this._x.dot(proj).value,
-            this._y.dot(proj).value,
-        );
+    constant(x) {
+        return this._x.x.constant(x);
+    }
+
+    source(dst) {
+        const xOff = this._x.scale(this.constant(dst.x));
+        const yOff = this._y.scale(this.constant(dst.y));
+        const p = this._origin.add(xOff).add(yOff)
+        const proj = this._camera.project(p);
+        return new Point2(proj.x.value, proj.y.value);
     }
 }
 
 class Solver {
     constructor(corners) {
         this.corners = corners;
-        this.solution = new Solution(0, 0, 0, 0, 0, 1.0);
+        this.solution = new Solution(
+            0, 0, 0, 0, 0, -1.0,
+            corners[0].x,
+            corners[0].y,
+            corners[1].x,
+            corners[1].y,
+            corners[2].x,
+            corners[2].y,
+            corners[3].x,
+            corners[3].y,
+        );
     }
 
     step() {
@@ -88,20 +113,26 @@ class Solver {
     }
 
     solutionMap() {
-        const camera = this.rawCamera();
-        return new SolutionMap(
-            camera,
-            this._projCorners(camera),
-        );
+        const [camera, points] = this.rawCameraAndPoints();
+        return new SolutionMap(camera, points);
     }
 
     gradient() {
-        const camera = this.camera();
+        const [camera, points] = this.cameraAndPoints();
+        const projPoints = points.map((p) => camera.project(p));
 
-        const projCorners = this._projCorners(camera);
+        let projMSE = camera.constant(0);
+        projPoints.forEach((x, i) => {
+            const target = new Vector2(
+                camera.constant(this.corners[i].x),
+                camera.constant(this.corners[i].y),
+            );
+            const diff = x.sub(target);
+            projMSE = projMSE.add(diff.dot(diff));
+        });
 
-        const cornerVecs = projCorners.map((c1, i) => {
-            const c2 = projCorners[(i + 1) % projCorners.length];
+        const cornerVecs = points.map((c1, i) => {
+            const c2 = points[(i + 1) % points.length];
             return c2.sub(c1).normalize();
         });
 
@@ -112,27 +143,17 @@ class Solver {
             sqDotSum = sqDotSum.add(v1.dot(v2).pow(2));
         }
 
-        return [new Solution(...sqDotSum.derivatives), sqDotSum.value];
+        let loss = sqDotSum.scale(0.01).add(projMSE);
+
+        return [new Solution(...loss.derivatives), loss];
     }
 
-    _projCorners(camera) {
-        return this.corners.map((c) => {
-            return camera.project(
-                new Vector3(
-                    camera.constant(c.x),
-                    camera.constant(c.y),
-                    camera.constant(0),
-                ),
-            );
-        })
+    cameraAndPoints() {
+        return this._cameraAndPoints(this._vars());
     }
 
-    camera() {
-        return this._camera(this._vars());
-    }
-
-    rawCamera() {
-        return this._camera(this._vars().map((x) => new DualNumber(x.value, [])));
+    rawCameraAndPoints() {
+        return this._cameraAndPoints(this._vars().map((x) => new DualNumber(x.value, [])));
     }
 
     _vars() {
@@ -143,13 +164,30 @@ class Solver {
             this.solution.camX,
             this.solution.camY,
             this.solution.camZ,
+            this.solution.p1x,
+            this.solution.p1y,
+            this.solution.p2x,
+            this.solution.p2y,
+            this.solution.p3x,
+            this.solution.p3y,
+            this.solution.p4x,
+            this.solution.p4y,
         );
     }
 
-    _camera(vars) {
-        const [rotX, rotY, rotZ, camX, camY, camZ] = vars;
+    _cameraAndPoints(vars) {
+        const [rotX, rotY, rotZ, camX, camY, camZ, p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y] = vars;
         const rotation = Matrix3.eulerRotation(rotX, rotY, rotZ);
         const camOrigin = new Vector3(camX, camY, camZ);
-        return new Camera(rotation, camOrigin);
+        const zero = p1x.constant(0);
+        return [
+            new Camera(rotation, camOrigin),
+            [
+                new Vector3(p1x, p1y, zero),
+                new Vector3(p2x, p2y, zero),
+                new Vector3(p3x, p3y, zero),
+                new Vector3(p4x, p4y, zero),
+            ],
+        ];
     }
 }

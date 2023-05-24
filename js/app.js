@@ -16,7 +16,6 @@ class App {
                 x / this.canvas.width,
                 y / this.canvas.height,
             ));
-            console.log(this._points);
             this.draw();
             if (this._points.length === 4) {
                 this.solve();
@@ -112,17 +111,14 @@ class App {
         const dst = dstCanvas.getContext('2d');
         const imgData = dst.createImageData(dstCanvas.width, dstCanvas.height);
 
-        for (let sx = 0; sx < 1; sx += 0.001) {
-            for (let sy = 0; sy < 1; sy += 0.001) {
-                const sourcePixel = source(sx, sy);
-                const dest = map.destPoint(new Point2(sx, sy));
-                const x = Math.round(dest.x * scale);
-                const y = Math.round(dest.y * scale);
-                if (x >= 0 && x < dstCanvas.width && y >= 0 && y < dstCanvas.height) {
-                    const idx = (x + y * dstCanvas.width) * 4;
-                    for (let i = 0; i < 4; i++) {
-                        imgData.data[idx + i] = sourcePixel[i];
-                    }
+        for (let x = 0; x < dstCanvas.width; x++) {
+            for (let y = 0; y < dstCanvas.height; y++) {
+                const dstPoint = new Point2(x / scale, y / scale);
+                const sourcePoint = map.source(dstPoint);
+                const sourcePixel = source(sourcePoint.x, sourcePoint.y);
+                const idx = (x + y * dstCanvas.width) * 4;
+                for (let i = 0; i < 4; i++) {
+                    imgData.data[idx + i] = sourcePixel[i];
                 }
             }
         }
@@ -146,8 +142,8 @@ class App {
 
         const data = ctx.getImageData(0, 0, extractionCanvas.width, extractionCanvas.height);
         return (relX, relY) => {
-            const x = Math.round(relX * extractionCanvas.width);
-            const y = Math.round(relY * extractionCanvas.height);
+            const x = Math.round(Math.max(0, Math.min(1, relX)) * extractionCanvas.width);
+            const y = Math.round(Math.max(0, Math.min(1, relY)) * extractionCanvas.height);
             const index = (x + y * extractionCanvas.width) * 4;
             return data.data.slice(index, index + 4);
         };
