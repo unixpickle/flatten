@@ -95,15 +95,18 @@ class App {
 
     solve() {
         const solver = new Solver(this._points);
-        for (let i = 0; i < 2000; i++) {
-            solver.step();
+        for (let i = 0; i < 10000; i++) {
+            const loss = solver.step();
+            if (i % 1000 == 0) {
+                console.log(i, loss, solver.solution);
+            }
         }
         const source = this.pixelSource();
         const map = solver.solutionMap();
 
         const w = map.width;
         const h = map.height;
-        const scale = Math.min(64 / w, 64 / h);
+        const scale = Math.min(200 / w, 200 / h);
 
         const dstCanvas = document.createElement('canvas');
         dstCanvas.width = Math.ceil(w * scale);
