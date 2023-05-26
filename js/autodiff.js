@@ -39,6 +39,14 @@ class DualNumber {
         return this.mul(other.pow(-1));
     }
 
+    abs() {
+        if (this.value >= 0) {
+            return this;
+        } else {
+            return this.scale(-1);
+        }
+    }
+
     pow(p) {
         return new DualNumber(
             Math.pow(this.value, p),
@@ -232,5 +240,9 @@ class Matrix3 {
             this.d.mul(vec.x).add(this.e.mul(vec.y)).add(this.f.mul(vec.z)),
             this.g.mul(vec.x).add(this.h.mul(vec.y)).add(this.i.mul(vec.z)),
         );
+    }
+
+    trace() {
+        return this.a.add(this.e).add(this.i);
     }
 }

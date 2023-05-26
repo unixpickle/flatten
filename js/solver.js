@@ -4,6 +4,26 @@ class Point2 {
         this.y = y;
     }
 
+    sub(other) {
+        return new Point2(this.x - other.x, this.y - other.y);
+    }
+
+    scale(s) {
+        return new Point2(this.x * s, this.y * s);
+    }
+
+    norm() {
+        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+    }
+
+    normalize() {
+        return this.scale(1 / this.norm());
+    }
+
+    dot(other) {
+        return this.x * other.x + this.y * other.y;
+    }
+
     dist(other) {
         return Math.sqrt(Math.pow(other.x - this.x, 2) + Math.pow(other.y - this.y, 2));
     }
@@ -33,6 +53,19 @@ class Solution {
             this.height + scale * gradient.height,
         );
     }
+
+    sign() {
+        return new Solution(
+            Math.sign(this.rotX),
+            Math.sign(this.rotY),
+            Math.sign(this.rotZ),
+            Math.sign(this.camX),
+            Math.sign(this.camY),
+            Math.sign(this.camZ),
+            Math.sign(this.width),
+            Math.sign(this.height),
+        )
+    }
 }
 
 class Camera {
@@ -57,7 +90,7 @@ class Camera {
 }
 
 class SolutionMap {
-    constructor(camera, points) {
+    constructor(camera, points, cornerOffset) {
         const v1 = points[1].sub(points[0]);
         const v2 = points[3].sub(points[0]);
 
@@ -65,6 +98,7 @@ class SolutionMap {
         this._origin = points[0];
         this._x = v1.normalize();
         this._y = v2.normalize();
+        this._cornerOffset = cornerOffset;
         this.width = v1.norm().value;
         this.height = v2.norm().value;
     }
@@ -77,7 +111,7 @@ class SolutionMap {
         const xOff = this._x.scale(this.constant(dst.x));
         const yOff = this._y.scale(this.constant(dst.y));
         const p = this._origin.add(xOff).add(yOff)
-        const proj = this._camera.project(p);
+        const proj = this._camera.project(p).add(this._cornerOffset);
         return new Point2(proj.x.value, proj.y.value);
     }
 }
@@ -94,34 +128,61 @@ class Solver {
             corners[1].dist(corners[0]),
             corners[3].dist(corners[0]),
         );
+        this.targetDots = cornerDots(corners).map((x) => Math.abs(x));
+        this.steps = 0;
     }
 
     step() {
+        const lr = 0.01 * Math.max(0, 5000 - this.steps) / 5000 + 0.01;
+        this.steps += 1;
         const [gradient, loss] = this.gradient();
-        this.solution = this.solution.addScaled(gradient, -0.01);
+        this.solution = this.solution.addScaled(gradient, -lr);
         return loss;
     }
 
     solutionMap() {
         const [camera, points] = this.rawCameraAndPoints();
-        return new SolutionMap(camera, points);
+        const cornerFirst = new Vector2(
+            camera.constant(this.corners[0].x),
+            camera.constant(this.corners[0].y),
+        );
+        const projFirst = camera.project(points[0]);
+        const cornerOffset = cornerFirst.sub(projFirst);
+        return new SolutionMap(camera, points, cornerOffset);
     }
 
     gradient() {
         const [camera, points] = this.cameraAndPoints();
         const projPoints = points.map((p) => camera.project(p));
 
+        const cornerTargets = this.corners.map((c) => new Vector2(
+            camera.constant(c.x),
+            camera.constant(c.y),
+        ));
+
+        // Ignore the exact canvas position to get better MSE.
+        const cornerOffset = cornerTargets[0].sub(projPoints[0]);
+
         let projMSE = camera.constant(0);
         projPoints.forEach((x, i) => {
-            const target = new Vector2(
-                camera.constant(this.corners[i].x),
-                camera.constant(this.corners[i].y),
-            );
-            const diff = x.sub(target);
+            const diff = x.add(cornerOffset).sub(cornerTargets[i]);
             projMSE = projMSE.add(diff.dot(diff));
         });
 
-        return [new Solution(...projMSE.derivatives), projMSE.value];
+        const targetDots = this.targetDots.map((x) => camera.constant(x));
+        const sourceDots = cornerDots(projPoints);
+        let dotMSE = camera.constant(0);
+        sourceDots.forEach((x, i) => {
+            dotMSE = dotMSE.add(x.abs().sub(targetDots[i]).pow(2));
+        });
+
+        // Trace is equal to 1+2*cos(theta), so maximizing it
+        // reduces the rotation angle.
+        const rotTerm = camera.rotation.trace().scale(-0.0001);
+
+        const loss = projMSE.add(dotMSE).add(rotTerm);
+
+        return [new Solution(...loss.derivatives), loss.value];
     }
 
     cameraAndPoints() {
@@ -162,4 +223,9 @@ class Solver {
             ],
         ];
     }
+}
+
+function cornerDots(points) {
+    const deltas = points.map((x, i) => points[(i + 1) % points.length].sub(x).normalize());
+    return deltas.map((x, i) => x.dot(deltas[(i + 1) % deltas.length]));
 }
