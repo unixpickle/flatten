@@ -95,6 +95,7 @@ class App {
 
     solve() {
         const solver = new Solver(this._points);
+        solver.initSearch(5);
         for (let i = 0; i < 10000; i++) {
             const loss = solver.step();
             if (i % 1000 == 0) {

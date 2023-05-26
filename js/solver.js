@@ -4,6 +4,10 @@ class Point2 {
         this.y = y;
     }
 
+    add(other) {
+        return new Point2(this.x + other.x, this.y + other.y);
+    }
+
     sub(other) {
         return new Point2(this.x - other.x, this.y - other.y);
     }
@@ -75,12 +79,11 @@ class Camera {
     }
 
     project(x) {
-        const point = this.origin.sub(x);
-        const rotated = this.rotation.mulVec(point);
-        const scale = rotated.z.pow(-1);
+        const point = this.rotation.mulVec(x).add(this.origin);
+        const scale = point.z.pow(-1);
         return new Vector2(
-            rotated.x.mul(scale),
-            rotated.y.mul(scale),
+            point.x.mul(scale),
+            point.y.mul(scale),
         );
     }
 
@@ -132,6 +135,51 @@ class Solver {
         this.steps = 0;
     }
 
+    initSearch(n) {
+        let loss = this.loss(false).value;
+        const stops = [];
+        for (let i = 0; i < n; i++) {
+            stops.push(2.0 / (n - 1) - 1);
+        }
+        stops.forEach((rotX) => {
+            stops.forEach((rotY) => {
+                stops.forEach((rotZ) => {
+                    stops.forEach((zOff) => {
+                        stops.forEach((scaleStop) => {
+                            const z = zOff - 1.1; // Should be <= -0.1
+                            const scale = (scaleStop + 1.5); // Should be in [0.5, 2.5].
+                            const s1 = new Solution(
+                                rotX * 0.2,
+                                rotY * 0.2,
+                                rotZ * 0.2,
+                                0,
+                                0,
+                                z,
+                                this.solution.width * scale,
+                                this.solution.height * scale,
+                            );
+                            const oldSolution = this.solution;
+                            const oldStep = this.step;
+                            this.solution = s1;
+                            this.steps = 0;
+                            let newLoss;
+                            for (let i = 0; i < 2; i++) {
+                                newLoss = this.step();
+                            }
+                            if (newLoss < loss) {
+                                loss = newLoss;
+                            } else {
+                                this.solution = oldSolution;
+                                this.step = oldStep;
+                            }
+                        });
+                    });
+                });
+            });
+        });
+        return loss;
+    }
+
     step() {
         const lr = 0.01 * Math.max(0, 5000 - this.steps) / 5000 + 0.01;
         this.steps += 1;
@@ -141,7 +189,7 @@ class Solver {
     }
 
     solutionMap() {
-        const [camera, points] = this.rawCameraAndPoints();
+        const [camera, points] = this.cameraAndPoints(false);
         const cornerFirst = new Vector2(
             camera.constant(this.corners[0].x),
             camera.constant(this.corners[0].y),
@@ -152,7 +200,12 @@ class Solver {
     }
 
     gradient() {
-        const [camera, points] = this.cameraAndPoints();
+        const loss = this.loss(true);
+        return [new Solution(...loss.derivatives), loss.value];
+    }
+
+    loss(derivatives) {
+        const [camera, points] = this.cameraAndPoints(derivatives);
         const projPoints = points.map((p) => camera.project(p));
 
         const cornerTargets = this.corners.map((c) => new Vector2(
@@ -178,19 +231,17 @@ class Solver {
 
         // Trace is equal to 1+2*cos(theta), so maximizing it
         // reduces the rotation angle.
-        const rotTerm = camera.rotation.trace().scale(-0.0001);
+        const rotTerm = camera.rotation.trace().scale(0.0);// .scale(-0.0001);
 
-        const loss = projMSE.add(dotMSE).add(rotTerm);
-
-        return [new Solution(...loss.derivatives), loss.value];
+        return projMSE.add(dotMSE).add(rotTerm);
     }
 
-    cameraAndPoints() {
-        return this._cameraAndPoints(this._vars());
-    }
-
-    rawCameraAndPoints() {
-        return this._cameraAndPoints(this._vars().map((x) => new DualNumber(x.value, [])));
+    cameraAndPoints(derivatives) {
+        let vars = this._vars();
+        if (!derivatives) {
+            vars = vars.map((x) => new DualNumber(x.value, []));
+        }
+        return this._cameraAndPoints(vars);
     }
 
     _vars() {
@@ -229,3 +280,39 @@ function cornerDots(points) {
     const deltas = points.map((x, i) => points[(i + 1) % points.length].sub(x).normalize());
     return deltas.map((x, i) => x.dot(deltas[(i + 1) % deltas.length]));
 }
+
+function testExample() {
+    const zero = new DualNumber(0, []);
+    const camera = new Camera(
+        Matrix3.eulerRotation(zero, zero.constant(0.1), zero),
+        new Vector3(zero, zero, zero.constant(-1)),
+    );
+    const corners = [
+        new Point2(0.3, 0.3),
+        new Point2(0.45, 0.3),
+        new Point2(0.45, 0.45),
+        new Point2(0.3, 0.45),
+    ];
+
+    let projCorners = corners.map((c) => {
+        const v = new Vector3(zero.constant(c.x), zero.constant(c.y), zero);
+        const proj = camera.project(v);
+        return new Point2(proj.x.value, proj.y.value);
+    });
+    const offset = corners[0].sub(projCorners[0]);
+    projCorners = projCorners.map((x) => x.add(offset));
+
+    const solver = new Solver(projCorners);
+    solver.initSearch(5);
+    // solver.solution.rotY = 0.1;
+    // solver.solution.width = 0.15;
+    // solver.solution.height = 0.15;
+    console.log(solver.step());
+    for (let i = 0; i < 10000; i++) {
+        solver.step();
+    }
+    console.log(solver.step());
+    console.log(solver.solution);
+}
+
+testExample();
