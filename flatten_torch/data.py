@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass, fields
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 
@@ -24,9 +24,15 @@ class Batch:
         return Batch(**kwargs)
 
     def __getitem__(self, *args) -> "Batch":
+        return self.map(lambda x: x.__getitem__(*args))
+
+    def to(self, *args, **kwargs) -> "Batch":
+        return self.map(lambda x: x.to(*args, **kwargs))
+
+    def map(self, f: Callable[[torch.Tensor], torch.Tensor]) -> "Batch":
         kwargs = dict()
         for field in fields(Batch):
-            kwargs[field.name] = getattr(self, field.name).__getitem__(*args)
+            kwargs[field.name] = f(getattr(self, field.name))
         return Batch(**kwargs)
 
     def __len__(self) -> int:
