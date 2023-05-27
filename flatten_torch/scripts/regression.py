@@ -21,7 +21,7 @@ def main():
 
     iter = 0
     while True:
-        batch = Batch.sample_batch(BATCH_SIZE).to(device)
+        batch = Batch.sample_batch(BATCH_SIZE, device=device)
         output = model(batch.proj_corners.flatten(1))
         origin, size, rotation, translation = torch.split(output, [3, 2, 3, 3], dim=-1)
         mse = (

@@ -42,6 +42,7 @@ class Batch:
     def sample_batch(
         cls,
         size: int,
+        device: torch.device = torch.device("cpu"),
         gen: Optional[torch.Generator] = None,
         margin: float = 0.1,
         z_near: float = 0.1,
@@ -51,6 +52,7 @@ class Batch:
         while not res or len(res) < size:
             sub_batch = cls._sample_batch(
                 max_batch=sample_size,
+                device=device,
                 gen=gen,
                 margin=margin,
                 z_near=z_near,
@@ -66,14 +68,17 @@ class Batch:
         cls,
         *,
         max_batch: int,
+        device: torch.device,
         gen: Optional[torch.Generator],
         margin: float,
         z_near: float,
     ) -> "Batch":
-        euler_angles = (torch.rand(size=(max_batch, 3), generator=gen) - 0.5) * math.pi
-        origin = torch.rand(size=(max_batch, 3), generator=gen) * 5 - 2.5
-        size = torch.rand(size=(max_batch, 2), generator=gen) + 0.01
-        translation = torch.rand(size=(max_batch, 3), generator=gen)
+        euler_angles = (
+            torch.rand(size=(max_batch, 3), generator=gen, device=device) - 0.5
+        ) * math.pi
+        origin = torch.rand(size=(max_batch, 3), generator=gen, device=device) * 5 - 2.5
+        size = torch.rand(size=(max_batch, 2), generator=gen, device=device) + 0.01
+        translation = torch.rand(size=(max_batch, 3), generator=gen, device=device)
         translation[..., :2] *= 5
         translation[..., :2] -= 2.5
         translation[..., 2] = -(0.1 + translation[..., 2] * 5)
