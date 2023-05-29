@@ -80,6 +80,7 @@ class Batch:
             torch.rand(size=(max_batch, 3), generator=generator, device=device) * 5
             - 2.5
         )
+        origin[..., 2] = 0
         size = (
             torch.rand(size=(max_batch, 2), generator=generator, device=device) + 0.01
         )

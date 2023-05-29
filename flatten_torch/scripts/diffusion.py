@@ -30,7 +30,7 @@ def main():
         print(f"loading from {SAVE_PATH}")
         with open(SAVE_PATH, "r") as f:
             obj = torch.load(f, map_location=device)
-            gen = obj["gen"]
+            gen.set_state(obj["gen"])
             iter = obj["iter"]
             opt.load_state_dict(obj["opt"])
             model.load_state_dict(obj["model"])
@@ -66,7 +66,7 @@ def main():
                     dict(
                         opt=opt.state_dict(),
                         model=model.state_dict(),
-                        gen=gen,
+                        gen=gen.get_state(),
                         iter=iter,
                     ),
                     f,

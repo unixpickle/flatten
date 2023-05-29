@@ -14,6 +14,8 @@ class DiffusionPredictor(nn.Module):
     ):
         super().__init__()
         self.device = device
+        self.d_cond = d_cond
+        self.d_input = d_input
         self.d_model = d_model
         self.time_embed = nn.Sequential(
             nn.Linear(d_model, d_model, device=device),

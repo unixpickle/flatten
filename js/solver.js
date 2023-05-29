@@ -80,7 +80,7 @@ class Camera {
 
     project(x) {
         const point = this.rotation.mulVec(x).add(this.origin);
-        const scale = point.z.pow(-1);
+        const scale = point.z.scale(-1).pow(-1);
         return new Vector2(
             point.x.mul(scale),
             point.y.mul(scale),
