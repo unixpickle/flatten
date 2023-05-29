@@ -28,7 +28,7 @@ def main():
 
     if os.path.exists(SAVE_PATH):
         print(f"loading from {SAVE_PATH}")
-        with open(SAVE_PATH, "r") as f:
+        with open(SAVE_PATH, "rb") as f:
             obj = torch.load(f, map_location=device)
             gen.set_state(obj["gen"])
             iter = obj["iter"]

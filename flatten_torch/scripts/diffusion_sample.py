@@ -18,10 +18,10 @@ def main():
         dict(
             schedule="linear",
             timesteps=1024,
-            respacing=128,
+            respacing="128",
         )
     )
-    with open(LOAD_PATH, "r") as f:
+    with open(LOAD_PATH, "rb") as f:
         obj = torch.load(f, map_location=device)
         model.load_state_dict(obj["model"])
 
@@ -38,7 +38,7 @@ def main():
             0.4369144027183263,
         ],
         device=device,
-    )
+    )[None]
 
     sample = diffusion.p_sample_loop(
         model,
