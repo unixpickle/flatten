@@ -4,7 +4,7 @@ import torch.optim as optim
 
 from flatten_torch.data import Batch
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 10000
 
 
 def main():

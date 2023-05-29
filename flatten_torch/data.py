@@ -43,7 +43,7 @@ class Batch:
         cls,
         size: int,
         device: torch.device = torch.device("cpu"),
-        gen: Optional[torch.Generator] = None,
+        generator: Optional[torch.Generator] = None,
         margin: float = 0.1,
         z_near: float = 0.1,
     ) -> "Batch":
@@ -53,7 +53,7 @@ class Batch:
             sub_batch = cls._sample_batch(
                 max_batch=sample_size,
                 device=device,
-                gen=gen,
+                generator=generator,
                 margin=margin,
                 z_near=z_near,
             )
@@ -69,16 +69,23 @@ class Batch:
         *,
         max_batch: int,
         device: torch.device,
-        gen: Optional[torch.Generator],
+        generator: Optional[torch.Generator],
         margin: float,
         z_near: float,
     ) -> "Batch":
         euler_angles = (
-            torch.rand(size=(max_batch, 3), generator=gen, device=device) - 0.5
+            torch.rand(size=(max_batch, 3), generator=generator, device=device) - 0.5
         ) * math.pi
-        origin = torch.rand(size=(max_batch, 3), generator=gen, device=device) * 5 - 2.5
-        size = torch.rand(size=(max_batch, 2), generator=gen, device=device) + 0.01
-        translation = torch.rand(size=(max_batch, 3), generator=gen, device=device)
+        origin = (
+            torch.rand(size=(max_batch, 3), generator=generator, device=device) * 5
+            - 2.5
+        )
+        size = (
+            torch.rand(size=(max_batch, 2), generator=generator, device=device) + 0.01
+        )
+        translation = torch.rand(
+            size=(max_batch, 3), generator=generator, device=device
+        )
         translation[..., :2] *= 5
         translation[..., :2] -= 2.5
         translation[..., 2] = -(0.1 + translation[..., 2] * 5)
