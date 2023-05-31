@@ -27,21 +27,20 @@ def main():
         obj = torch.load(f, map_location=device)
         model.load_state_dict(obj["model"])
 
-    while True:
-        batch = Batch.sample_batch(BATCH_SIZE, device=device)
+    batch = Batch.sample_batch(BATCH_SIZE, device=device)
 
-        sample = diffusion.p_sample_loop(
-            model,
-            shape=(len(input), model.d_input),
-            clip_denoised=False,
-            model_kwargs=dict(cond=batch.proj_corners.flatten(1)),
-        )
-        origin, size, rotation, translation = torch.split(sample, [3, 2, 3, 3], dim=-1)
-        camera = Camera(rotation=euler_rotation(rotation), translation=translation)
-        corners = corners_on_zplane(origin, size)
-        proj = camera.project(corners)
-        reproj_err = (proj - batch.proj_corners).pow(2).mean()
-        print(f"mse={reproj_err.item()}")
+    sample = diffusion.p_sample_loop(
+        model,
+        shape=(BATCH_SIZE, model.d_input),
+        clip_denoised=False,
+        model_kwargs=dict(cond=batch.proj_corners.flatten(1)),
+    )
+    origin, size, rotation, translation = torch.split(sample, [3, 2, 3, 3], dim=-1)
+    camera = Camera(rotation=euler_rotation(rotation), translation=translation)
+    corners = corners_on_zplane(origin, size)
+    proj = camera.project(corners)
+    reproj_err = (proj.projected - batch.proj_corners).pow(2).mean()
+    print(f"mse={reproj_err.item()}")
 
 
 if __name__ == "__main__":
