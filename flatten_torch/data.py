@@ -91,16 +91,7 @@ class Batch:
         translation[..., :2] -= 2.5
         translation[..., 2] = -(0.1 + translation[..., 2] * 5)
 
-        zero = torch.zeros_like(size[..., 0])
-        corners = torch.stack(
-            [
-                origin,
-                origin + torch.stack([size[..., 0], zero, zero], dim=-1),
-                origin + torch.stack([size[..., 0], size[..., 1], zero], dim=-1),
-                origin + torch.stack([zero, size[..., 1], zero], dim=-1),
-            ],
-            dim=1,
-        )
+        corners = corners_on_zplane(origin, size)
         camera = Camera(rotation=euler_rotation(euler_angles), translation=translation)
         proj = camera.project(corners)
         valid = (
@@ -118,3 +109,19 @@ class Batch:
             translation=translation[valid],
             proj_corners=proj.projected[valid],
         )
+
+
+def corners_on_zplane(origin: torch.Tensor, size: torch.Tensor) -> torch.Tensor:
+    """
+    Get an [N x 4 x 3] grid of 3D corner points.
+    """
+    zero = torch.zeros_like(size[..., 0])
+    return torch.stack(
+        [
+            origin,
+            origin + torch.stack([size[..., 0], zero, zero], dim=-1),
+            origin + torch.stack([size[..., 0], size[..., 1], zero], dim=-1),
+            origin + torch.stack([zero, size[..., 1], zero], dim=-1),
+        ],
+        dim=1,
+    )

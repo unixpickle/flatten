@@ -1,10 +1,5 @@
-import os
-
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
-from flatten_torch.data import Batch
 from flatten_torch.gaussian_diffusion import diffusion_from_config
 from flatten_torch.model import DiffusionPredictor
 
