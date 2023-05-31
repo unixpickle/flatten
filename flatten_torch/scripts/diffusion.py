@@ -29,8 +29,8 @@ def main():
     if os.path.exists(SAVE_PATH):
         print(f"loading from {SAVE_PATH}")
         with open(SAVE_PATH, "rb") as f:
-            obj = torch.load(f, map_location=device)
-            gen.set_state(obj["gen"])
+            obj = torch.load(f)
+            gen.set_state(obj["gen"].cpu())
             iter = obj["iter"]
             opt.load_state_dict(obj["opt"])
             model.load_state_dict(obj["model"])
