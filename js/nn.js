@@ -1,5 +1,39 @@
 (function () {
 
+    class Shape extends Array {
+        toString() {
+            return "Shape(" + this.join(", ") + ")"
+        }
+
+        numel() {
+            return this.reduce((cur, v) => cur * v, 1);
+        }
+
+        infer(numel) {
+            const numNeg1 = this.reduce((c, v) => c + (v === -1 ? 1 : 0));
+
+            if (numNeg1 > 1) {
+                throw new Error("too many unknown entries in shape: " + this);
+            }
+
+            if (numNeg1 === 1) {
+                const product = this.reduce((c, v) => c * (v === -1 ? 1 : v));
+                if (numel % product !== 0) {
+                    throw new Error("incompatible shape " + this + " for " + numel + " elements");
+                }
+                const res = this.slice();
+                res[this.indexOf(-1)] = numel / product;
+                return res;
+            }
+
+            return this;
+        }
+
+        equals(other) {
+            return this.length === other.length && !this.some((x, i) => x !== other[i]);
+        }
+    }
+
     class Tensor {
         constructor(data, shape, backward) {
             this.data = data;
@@ -7,20 +41,123 @@
             this.backward = backward || null;
         }
 
+        static zeros(shape) {
+            const data = new Float32Array(shape.numel());
+            return new Tensor(data, shape, null);
+        }
+
         t() {
             if (this.shape.length !== 2) {
                 throw new Error("can only transpose 2D array");
             }
-            const result = new Float32Array(this.data.length);
+            const result = Tensor.zeros(new Shape(this.shape[1], this.shape[0]));
             for (let i = 0; i < this.shape[0]; ++i) {
                 for (let j = 0; j < this.shape[1]; ++j) {
-                    result[i + j * this.shape[0]] = this.data[i * this.shape[1] + j];
+                    result.data[i + j * this.shape[0]] = this.data[i * this.shape[1] + j];
                 }
             }
-            const backward = !this.needsGrad() ? null : (grad) => {
+            result.backward = !this.needsGrad() ? null : (grad) => {
                 this.backward(grad.t());
             };
-            return new Tensor(result, shape, backward);
+            return result;
+        }
+
+        reshape(shape) {
+            const shape = shape.infer(this.shape.numel());
+            if (shape.numel() !== this.shape.numel()) {
+                throw new Error("old shape " + this.shape + " incompatible with " + shape);
+            }
+            const backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.reshape(this.shape));
+            };
+            return new Tensor(this.data, shape, backward);
+        }
+
+        sum(axis) {
+            if (axis < 0) {
+                axis += this.shape.length;
+            }
+            if (axis >= this.shape.length || axis < 0) {
+                throw new Error("axis " + axis + " out of range");
+            }
+            const n = this.shape[axis];
+            let innerSize = 1;
+            let outerSize = 1;
+            this.shape.forEach((x, i) => {
+                if (i < axis) {
+                    outerSize *= x;
+                } else if (i > axis) {
+                    innerSize *= x;
+                }
+            });
+            const data = new Float32Array(innerSize * outerSize);
+            for (let i = 0; i < outerSize; ++i) {
+                for (let j = 0; j < n; ++j) {
+                    for (let k = 0; k < innerSize; ++k) {
+                        data[k + i * innerSize] += this.data[(i * n + j) * innerSize + k];
+                    }
+                }
+            }
+            const newShape = new Shape(
+                ...this.shape.slice(0, i),
+                ...this.shape.slice(i + 1, this.shape.length),
+            );
+            const backward = (!this.needsGrad() ? null : (grad) => {
+                this.backward(grad.unsqueeze(axis).repeat(axis, n));
+            });
+            return new Tensor(data, newShape, backward);
+        }
+
+        unsqueeze(axis) {
+            if (axis < 0) {
+                axis += this.shape.length + 1;
+            }
+            const shape = new Shape(...this.shape.slice(0, axis), 1, ...this.shape.slice(axis));
+            return this.reshape(shape);
+        }
+
+        repeat(axis, reps) {
+            const shape = new Shape(
+                ...this.shape.slice(0, axis),
+                this.shape[axis] * reps,
+                ...this.shape.slice(axis + 1),
+            );
+            const result = Tensor.zeros(shape);
+            const outerSize = this.shape.slice(0, axis).numel();
+            const innerSize = this.shape.slice(axis).numel();
+            for (let i = 0; i < outerSize; ++i) {
+                for (let j = 0; j < innerSize; ++j) {
+                    const x = this.data[i * innerSize + j];
+                    for (let k = 0; k < reps; ++k) {
+                        result.data[(i * reps + k) * innerSize + j] = x;
+                    }
+                }
+            }
+            result.backward = !this.needsGrad() ? null : (grad) => {
+                const extShape = new Shape(
+                    ...this.shape.slice(0, axis),
+                    reps,
+                    this.shape[axis],
+                    ...this.shape.slice(axis + 1),
+                )
+                this.backward(grad.reshape(extShape).sum(axis));
+            };
+            return result;
+        }
+
+        add(other) {
+            if (!this.shape.equals(other.shape)) {
+                throw new Error("element-wise operation requires equal shape");
+            }
+            const res = this.detach().clone();
+            res.data.forEach((x, i) => {
+                return res.data[x] += other.data[i];
+            });
+            res.backward = !this.needsGrad() && other.needsGrad() ? null : (grad) => {
+                this.backward(grad);
+                other.backward(grad);
+            };
+            return res;
         }
 
         needsGrad() {
@@ -60,8 +197,8 @@
 
     function matmul(m1, m2) {
         if (m1.shape.length !== 2 || m2.shape.length !== 2 || m1.shape[1] !== m2.shape[0]) {
-            throw new Error("invalid input shapes: " + m1.shape.join(",") + ", " +
-                m2.shape.join(","));
+            throw new Error("invalid input shapes: " + m1.shape + ", " +
+                m2.shape);
         }
         const bs = m1.shape[0];
         const n_input = m1.shape[1];
@@ -86,35 +223,14 @@
                 m2.backward(matmul(m1.detach().t(), grad));
             }
         };
-        return new Tensor(product, [m1.shape[0], m2.shape[1]], backward);
+        return new Tensor(product, new Shape(m1.shape[0], m2.shape[1]), backward);
     }
 
     function addBias(x, y) {
         if (x.shape.length !== 2 || y.shape.length !== 1 || x.shape[1] !== y.shape[0]) {
-            throw new Error("invalid shapes: " + x.shape.join(",") + ", " + y.shape.join(","));
+            throw new Error("invalid shapes: " + x.shape + ", " + y.shape);
         }
-        const sum = x.detach().clone();
-        for (let i = 0; i < x.shape[0]; ++i) {
-            const offset = i * x.shape[1];
-            for (let j = 0; j < x.shape[1]; ++j) {
-                sum.data[offset + j] += y.data[j];
-            }
-        }
-        sum.backward = (!x.needsGrad() && !y.needsGrad() ? null : (grad) => {
-            if (x.needsGrad()) {
-                x.backward(grad);
-            }
-            if (y.needsGrad()) {
-                const g = new Float32Array(y.data.length);
-                for (let i = 0; i < x.shape[0]; i++) {
-                    for (let j = 0; j < x.shape[1]; j++) {
-                        g.data[j] += grad.data[i * x.shape[1] + j];
-                    }
-                }
-                y.backward(new Tensor(g, y.shape, null));
-            }
-        });
-        return sum;
+        return x.add(y.unsqueeze(0).repeat(0, x.shape[0]));
     }
 
 })();
