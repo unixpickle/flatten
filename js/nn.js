@@ -191,8 +191,8 @@
                 throw new Error("element-wise operation requires equal shape");
             }
             const res = this.detach().clone();
-            res.data.forEach((x, i) => {
-                return res.data[x] += other.data[i];
+            other.data.forEach((x, i) => {
+                res.data[i] += x;
             });
             res.backward = !this.needsGrad() && other.needsGrad() ? null : (grad) => {
                 this.backward(grad);
@@ -227,8 +227,8 @@
             ) {
                 throw new Error("invalid shapes: " + weight.shape + ", " + bias.shape);
             }
-            this.n_output = weight.shape[0];
-            this.n_input = weight.shape[1];
+            this.numOutput = weight.shape[0];
+            this.numInput = weight.shape[1];
         }
 
         forward(x) {
@@ -241,15 +241,17 @@
             throw new Error("invalid input shapes: " + m1.shape + ", " +
                 m2.shape);
         }
-        const bs = m1.shape[0];
-        const n_input = m1.shape[1];
-        const n_output = m2.shape[1];
-        const product = new Float32Array(bs * n_output);
-        for (let i = 0; i < n_output; ++i) {
-            for (let j = 0; j < n_input; ++j) {
-                const w = m1.data[i * this.n_input + j];
-                for (let k = 0; k < bs; ++k) {
-                    product[k * n_output + i] += w * m2.data[k * bs + j];
+        // ij,jk -> ik
+        const sizeI = m1.shape[0];
+        const sizeJ = m1.shape[1];
+        const sizeK = m2.shape[1];
+        const product = new Float32Array(sizeI * sizeK);
+        for (let i = 0; i < sizeI; ++i) {
+            for (let j = 0; j < sizeJ; ++j) {
+                const w = m1.data[i * sizeJ + j];
+                for (let k = 0; k < sizeK; ++k) {
+                    const w1 = m2.data[j * sizeK + k];
+                    product[i * sizeK + k] += w * w1;
                 }
             }
         }
