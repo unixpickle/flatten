@@ -87,6 +87,53 @@
             return Tensor.stackOuter(arr.map((x) => Tensor.fromData(x)));
         }
 
+        static cat(tensors, axis) {
+            // Sanity check for compatible shapes.
+            const fillerShapes = tensors.map((x) => {
+                return Shape.make(...x.shape.slice(0, axis), -1, ...x.shape.slice(axis + 1));
+            });
+            fillerShapes.forEach((x, i) => {
+                if (x.length !== fillerShapes[0].length || !x.equals(fillerShapes[0])) {
+                    throw new Error("incompatible shapes: " + tensors[0].shape + " and " +
+                        tensors[i].shape);
+                }
+            });
+
+            const newShape = Shape.make(
+                ...tensors[0].shape.slice(0, axis),
+                tensors.reduce((c, x) => c + x.shape[axis], 0),
+                ...tensors[0].shape.slice(axis + 1),
+            );
+            const midSize = newShape[axis];
+            const outerSize = newShape.slice(0, axis).numel();
+            const innerSize = newShape.slice(axis + 1).numel();
+            const result = Tensor.zeros(newShape);
+            let offset = 0;
+            tensors.forEach((x) => {
+                const n = x.shape[axis];
+                for (let i = 0; i < outerSize; ++i) {
+                    for (let j = 0; j < n; ++j) {
+                        for (let k = 0; k < innerSize; ++k) {
+                            const c = x.data[(i * n + j) * innerSize + k];
+                            result.data[(i * midSize + j + offset) * innerSize + k] = c;
+                        }
+                    }
+                }
+                offset += n;
+            });
+            result.backward = !tensors.some((x) => x.needsGrad()) ? null : (grad) => {
+                let offset = 0;
+                tensors.forEach((x) => {
+                    const n = x.shape[axis];
+                    if (x.needsGrad()) {
+                        x.backward(grad.slice(axis, offset, offset + n));
+                    }
+                    offset += n;
+                });
+            };
+            return result;
+        }
+
         t() {
             if (this.shape.length !== 2) {
                 throw new Error("can only transpose 2D array");
@@ -186,6 +233,41 @@
             return result;
         }
 
+        slice(axis, start, end) {
+            if (axis < 0) {
+                axis += this.shape.length;
+            }
+            if (axis < 0 || axis >= this.shape.length) {
+                throw new Error("axis out of bounds");
+            }
+            if (typeof end === "undefined") {
+                end = this.shape[axis];
+            }
+            if (end < start || start < 0 || end > this.shape[axis]) {
+                throw new Error('invalid range');
+            }
+            const outerSize = this.shape.slice(0, axis).numel();
+            const innerSize = this.shape.slice(axis + 1).numel();
+            const midSize = this.shape[axis];
+            const result = Tensor.zeros(Shape.make(
+                ...this.shape.slice(0, axis),
+                end - start,
+                ...this.shape.slice(axis + 1),
+            ));
+            for (let i = 0; i < outerSize; ++i) {
+                for (let j = 0; j < end - start; ++j) {
+                    for (let k = 0; k < innerSize; ++k) {
+                        const c = this.data[(i * midSize + j + start) * innerSize + k];
+                        result.data[(i * (end - start) + j) * innerSize + k] = c;
+                    }
+                }
+            }
+            if (this.needsGrad()) {
+                throw new Error('slice does not support gradients');
+            }
+            return result;
+        }
+
         add(other) {
             if (!this.shape.equals(other.shape)) {
                 throw new Error("element-wise operation requires equal shape");
@@ -194,9 +276,32 @@
             other.data.forEach((x, i) => {
                 res.data[i] += x;
             });
-            res.backward = !this.needsGrad() && other.needsGrad() ? null : (grad) => {
-                this.backward(grad);
-                other.backward(grad);
+            res.backward = !(this.needsGrad() || other.needsGrad()) ? null : (grad) => {
+                if (this.needsGrad()) {
+                    this.backward(grad);
+                }
+                if (other.needsGrad()) {
+                    other.backward(grad);
+                }
+            };
+            return res;
+        }
+
+        mul(other) {
+            if (!this.shape.equals(other.shape)) {
+                throw new Error("element-wise operation requires equal shape");
+            }
+            const res = this.detach().clone();
+            other.data.forEach((x, i) => {
+                res.data[i] *= x;
+            });
+            res.backward = !(this.needsGrad() || other.needsGrad()) ? null : (grad) => {
+                if (this.needsGrad()) {
+                    this.backward(grad.mul(other.detach()));
+                }
+                if (other.needsGrad()) {
+                    other.backward(grad.mul(this.detach()));
+                }
             };
             return res;
         }
