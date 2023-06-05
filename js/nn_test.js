@@ -118,6 +118,20 @@
         const t4 = nn.Tensor.cat([x.slice(2, 0, 2), x.slice(2, 2, 3)], 2);
         assertEqual(x, t4);
 
+        const x1 = nn.Tensor.fromData([[[1], [2]], [[4], [5]]]);
+        const x2 = nn.Tensor.fromData([[[-2]], [[-1]]]);
+        let x1Grad = null;
+        let x2Grad = null;
+        x1.backward = (x) => x1Grad = x;
+        x2.backward = (x) => x2Grad = x;
+
+        const joined = nn.Tensor.cat([x1, x2], 1);
+        const grad = nn.Tensor.fromData([[[-3], [-4], [-8]], [[-5], [-6], [-9]]]);
+        joined.backward(grad);
+
+        assertEqual(x1Grad, nn.Tensor.fromData([[[-3], [-4]], [[-5], [-6]]]));
+        assertEqual(x2Grad, nn.Tensor.fromData([[[-8]], [[-9]]]));
+
         console.log('[Done] cat');
     }
 
