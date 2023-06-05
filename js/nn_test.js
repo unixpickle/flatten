@@ -26,7 +26,7 @@
         console.assert(output.data[1] === 21);
         console.assert(output.data[2] === 28);
 
-        const loss = output.sum(0).sum(0);
+        const loss = output.sum();
         console.assert(loss.data[0] === 66);
 
         loss.backward(nn.Tensor.fromData(1));
@@ -121,6 +121,26 @@
         console.log('[Done] cat');
     }
 
+    function testSinCos() {
+        const t = nn.Tensor.fromData([1, 2, 3, 4]);
+        let tGrad = null;
+        t.backward = (g) => tGrad = g;
+
+        t.sin().sum().backward(nn.Tensor.fromData(1));
+        tGrad.data.forEach((x, i) => {
+            const y = Math.cos(t.data[i]);
+            console.assert(Math.abs(x - y) < 1e-5, x, y);
+        });
+
+        t.cos().sum().backward(nn.Tensor.fromData(1));
+        tGrad.data.forEach((x, i) => {
+            const y = -Math.sin(t.data[i]);
+            console.assert(Math.abs(x - y) < 1e-5, x, y);
+        });
+
+        console.log('[Done] sin/cos');
+    }
+
     function assertEqual(t1, t2) {
         console.assert(t1.shape.equals(t2.shape), t1.shape, t2.shape);
         const bad = t1.data.some((x, i) => x != t2.data[i]);
@@ -131,6 +151,7 @@
         testLinear();
         testSplit();
         testCat();
+        testSinCos();
     };
 
 })();

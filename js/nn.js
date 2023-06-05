@@ -162,6 +162,9 @@
         }
 
         sum(axis) {
+            if (typeof axis === "undefined") {
+                return this._sumAll();
+            }
             if (axis < 0) {
                 axis += this.shape.length;
             }
@@ -194,6 +197,19 @@
                 this.backward(grad.unsqueeze(axis).repeat(axis, n));
             });
             return new Tensor(data, newShape, backward);
+        }
+
+        _sumAll() {
+            const res = Tensor.zeros(new Shape());
+            res.data[0] = this.data.reduce((total, x) => total + x, 0);
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                const repeated = Tensor.zeros(this.shape);
+                for (let i = 0; i < repeated.data.length; ++i) {
+                    repeated.data[i] = grad.data[0];
+                }
+                this.backward(repeated);
+            };
+            return res;
         }
 
         unsqueeze(axis) {
@@ -244,7 +260,7 @@
                 end = this.shape[axis];
             }
             if (end < start || start < 0 || end > this.shape[axis]) {
-                throw new Error('invalid range');
+                throw new Error("invalid range");
             }
             const outerSize = this.shape.slice(0, axis).numel();
             const innerSize = this.shape.slice(axis + 1).numel();
@@ -263,7 +279,7 @@
                 }
             }
             if (this.needsGrad()) {
-                throw new Error('slice does not support gradients');
+                throw new Error("slice does not support gradients");
             }
             return result;
         }
@@ -302,6 +318,39 @@
                 if (other.needsGrad()) {
                     other.backward(grad.mul(this.detach()));
                 }
+            };
+            return res;
+        }
+
+        scale(s) {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = s * res.data[i];
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.scale(s));
+            };
+            return res;
+        }
+
+        sin() {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = Math.sin(res.data[i]);
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.mul(this.detach().cos()));
+            };
+            return res;
+        }
+
+        cos() {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = Math.cos(res.data[i]);
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.mul(this.detach().sin()).scale(-1));
             };
             return res;
         }
