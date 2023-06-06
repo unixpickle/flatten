@@ -155,6 +155,20 @@
         console.log('[Done] sin/cos');
     }
 
+    function testPow() {
+        const x = nn.Tensor.fromData([1, 2, 3]);
+        let xGrad = null;
+        x.backward = (g) => xGrad = g;
+
+        const out = x.pow(3);
+        assertEqual(out, nn.Tensor.fromData([1, 2 * 2 * 2, 3 * 3 * 3]));
+
+        out.sum().backward(nn.Tensor.fromData(1));
+        assertEqual(xGrad, nn.Tensor.fromData([3, 3 * 2 * 2, 3 * 3 * 3]));
+
+        console.log('[Done] pow');
+    }
+
     function assertEqual(t1, t2) {
         console.assert(t1.shape.equals(t2.shape), t1.shape, t2.shape);
         const bad = t1.data.some((x, i) => x != t2.data[i]);
@@ -166,6 +180,7 @@
         testSplit();
         testCat();
         testSinCos();
+        testPow();
     };
 
 })();

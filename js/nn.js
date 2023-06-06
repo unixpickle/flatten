@@ -355,6 +355,17 @@
             return res;
         }
 
+        pow(p) {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = Math.pow(res.data[i], p);
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.mul(this.pow(p - 1).scale(p)));
+            };
+            return res;
+        }
+
         needsGrad() {
             return this.backward !== null;
         }
