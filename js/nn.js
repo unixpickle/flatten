@@ -441,12 +441,73 @@
         return x.add(y.unsqueeze(0).repeat(0, x.shape[0]));
     }
 
+    function rotation(axis, theta) {
+        if (!theta.shape.equals(new Shape())) {
+            throw new Error("invalid theta shape (expected scalar): " + theta.shape);
+        }
+        const cos = Math.cos(theta.data[0]);
+        const sin = Math.sin(theta.data[0]);
+        const result = Tensor.zeros(Shape.make(3, 3));
+        if (axis === 0) {
+            result.data[0] = 1;
+            result.data[4] = cos;
+            result.data[5] = -sin;
+            result.data[7] = sin;
+            result.data[8] = cos;
+            if (theta.needsGrad()) {
+                result.backward = (grad) => {
+                    const downstream = Tensor.zeros(theta.shape);
+                    downstream.data[0] = (
+                        grad.data[4] * -sin - grad.data[5] * cos + grad.data[7] * cos - grad.data[8] * sin
+                    );
+                    theta.backward(downstream);
+                };
+            }
+        } else if (axis === 1) {
+            result.data[0] = cos;
+            result.data[2] = sin;
+            result.data[4] = 1;
+            result.data[6] = -sin;
+            result.data[8] = cos;
+            if (theta.needsGrad()) {
+                result.backward = (grad) => {
+                    const downstream = Tensor.zeros(theta.shape);
+                    downstream.data[0] = (
+                        grad.data[0] * -sin + grad.data[2] * cos - grad.data[6] * cos
+                        - grad.data[8] * sin
+                    );
+                    theta.backward(downstream);
+                };
+            }
+        } else if (axis === 2) {
+            result.data[0] = cos;
+            result.data[1] = -sin;
+            result.data[3] = sin;
+            result.data[4] = cos;
+            result.data[8] = 1;
+            if (theta.needsGrad()) {
+                result.backward = (grad) => {
+                    const downstream = Tensor.zeros(theta.shape);
+                    downstream.data[0] = (
+                        grad.data[0] * -sin - grad.data[1] * cos + grad.data[3] * cos
+                        - grad.data[4] * sin
+                    );
+                    theta.backward(downstream);
+                };
+            }
+        } else {
+            throw new Error("invalid axis: " + axis);
+        }
+        return result;
+    }
+
     window.nn = {
         Shape: Shape,
         Tensor: Tensor,
         Linear: Linear,
         matmul: matmul,
         addBias: addBias,
+        rotation: rotation,
     };
 
 })();

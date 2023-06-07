@@ -169,6 +169,55 @@
         console.log('[Done] pow');
     }
 
+    function testRotation() {
+        for (let axis = 0; axis < 3; ++axis) {
+            [-0.3, 0.3, Math.PI, Math.PI * 2].forEach((theta) => {
+                const tensor = nn.rotation(axis, nn.Tensor.fromData(theta));
+
+                // Make sure it's orthonormal.
+                const product = nn.matmul(tensor, tensor.t());
+                const identity = nn.Tensor.fromData([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+                identity.data.forEach((x, i) => {
+                    console.assert(Math.abs(x - product.data[i]) < 1e-5, product)
+                });
+
+                // Make sure negative angle is the inverse.
+                const invRot = nn.rotation(axis, nn.Tensor.fromData(-theta));
+                invRot.t().data.forEach((x, i) => {
+                    console.assert(Math.abs(x - tensor.data[i]) < 1e-5, tensor, invRot);
+                });
+
+                // Test backward pass with finite differences.
+                const thetaT = nn.Tensor.fromData(theta);
+                let thetaGrad = null;
+                thetaT.backward = (g) => thetaGrad = g;
+
+                const outGrad = nn.Tensor.fromData([
+                    [1.0, -2.3, 3.1], [-0.53, 0.35, 0.837], [-0.7, 0.82, -0.9],
+                ]);
+                const objective = (x) => {
+                    const mat = nn.rotation(axis, x);
+                    return mat.mul(outGrad).sum();
+                };
+
+                objective(thetaT).backward(nn.Tensor.fromData(1));
+
+                const epsilon = 1e-2;
+                const o1 = objective(nn.Tensor.fromData(theta + epsilon)).data[0];
+                const o2 = objective(nn.Tensor.fromData(theta - epsilon)).data[0];
+                const approxGrad = (o1 - o2) / (2 * epsilon);
+
+                console.assert(
+                    // Even 1e-4 should work, but we don't want spurious failures.
+                    Math.abs(approxGrad - thetaGrad.data[0]) < 1e-2,
+                    approxGrad,
+                    thetaGrad.data[0],
+                );
+            });
+        }
+        console.log('[Done] rotation');
+    }
+
     function assertEqual(t1, t2) {
         console.assert(t1.shape.equals(t2.shape), t1.shape, t2.shape);
         const bad = t1.data.some((x, i) => x != t2.data[i]);
@@ -181,6 +230,7 @@
         testCat();
         testSinCos();
         testPow();
+        testRotation();
     };
 
 })();
