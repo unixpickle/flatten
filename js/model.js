@@ -38,6 +38,21 @@
         }
     }
 
+    function timestepEmbedding(timesteps, dim) {
+        const maxPeriod = 10000;
+        const range = nn.Tensor.zeros(nn.Shape.make(1, dim / 2));
+        for (let i = 0; i < dim / 2; ++i) {
+            range.data[i] = i;
+        }
+        const freqs = (range.scale(-Math.log(maxPeriod) / (dim / 2)))
+            .exp()
+            .repeat(0, timesteps.shape[0]);
+        const args = freqs.mul(timesteps.reshape(nn.Shape.make(-1, 1)).repeat(1, freqs.shape[1]));
+        const embedding = nn.Tensor.cat([args.cos(), args.sin()], 1);
+        return embedding;
+    }
+
     nn.DiffusionModel = DiffusionModel;
+    nn.timestepEmbedding = timestepEmbedding;
 
 })();

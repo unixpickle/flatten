@@ -23,7 +23,7 @@
             }
 
             if (numNeg1 === 1) {
-                const product = this.reduce((c, v) => c * (v === -1 ? 1 : v));
+                const product = this.reduce((c, v) => c * (v === -1 ? 1 : v), 1);
                 if (numel % product !== 0) {
                     throw new Error("incompatible shape " + this + " for " + numel + " elements");
                 }
@@ -88,6 +88,9 @@
         }
 
         static cat(tensors, axis) {
+            if (axis < 0) {
+                throw new Error("negative axis is not supported");
+            }
             // Sanity check for compatible shapes.
             const fillerShapes = tensors.map((x) => {
                 return Shape.make(...x.shape.slice(0, axis), -1, ...x.shape.slice(axis + 1));
@@ -104,6 +107,7 @@
                 tensors.reduce((c, x) => c + x.shape[axis], 0),
                 ...tensors[0].shape.slice(axis + 1),
             );
+
             const midSize = newShape[axis];
             const outerSize = newShape.slice(0, axis).numel();
             const innerSize = newShape.slice(axis + 1).numel();
