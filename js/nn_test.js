@@ -187,6 +187,20 @@
         console.log('[Done] exp')
     }
 
+    function testReLU() {
+        const x = nn.Tensor.fromData([1, 2, -4, 0, 3, -1]);
+        let xGrad = null;
+        x.backward = (g) => xGrad = g;
+
+        const out = x.relu();
+        assertEqual(out, nn.Tensor.fromData([1, 2, 0, 0, 3, 0]));
+
+        out.sum().backward(nn.Tensor.fromData(-3));
+        assertEqual(xGrad, nn.Tensor.fromData([-3, -3, 0, 0, -3, 0]));
+
+        console.log('[Done] ReLU');
+    }
+
     function testRotation() {
         for (let axis = 0; axis < 3; ++axis) {
             [-0.3, 0.3, Math.PI, Math.PI * 2].forEach((theta) => {
@@ -249,6 +263,7 @@
         testSinCos();
         testPow();
         testExp();
+        testReLU();
         testRotation();
     };
 

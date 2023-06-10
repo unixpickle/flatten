@@ -381,6 +381,25 @@
             return res;
         }
 
+        relu() {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                if (res.data[i] < 0) {
+                    res.data[i] = 0;
+                }
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                const outGrad = grad.clone();
+                for (let i = 0; i < res.data.length; ++i) {
+                    if (res.data[i] === 0) {
+                        outGrad.data[i] = 0;
+                    }
+                }
+                this.backward(outGrad);
+            };
+            return res;
+        }
+
         needsGrad() {
             return this.backward !== null;
         }
@@ -413,6 +432,15 @@
 
         forward(x) {
             return addBias(matmul(x, this.weight), this.bias);
+        }
+    }
+
+    class ReLU {
+        constructor() {
+        }
+
+        forward(x) {
+            return x.relu();
         }
     }
 
@@ -520,6 +548,7 @@
         Shape: Shape,
         Tensor: Tensor,
         Linear: Linear,
+        ReLU: ReLU,
         matmul: matmul,
         addBias: addBias,
         rotation: rotation,
