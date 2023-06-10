@@ -19,24 +19,24 @@ class DiffusionPredictor(nn.Module):
         self.d_model = d_model
         self.time_embed = nn.Sequential(
             nn.Linear(d_model, d_model, device=device),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
         )
         self.cond_embed = nn.Sequential(
             nn.Linear(d_cond, d_model, device=device),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
         )
         self.input_embed = nn.Sequential(
             nn.Linear(d_input, d_model, device=device),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
         )
         self.backbone = nn.Sequential(
             nn.Linear(d_model, d_model, device=device),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(d_model, d_input * 2, device=device),
         )
 
