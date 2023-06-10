@@ -366,6 +366,17 @@
             return res;
         }
 
+        exp() {
+            const res = this.detach().clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = Math.exp(res.data[i]);
+            }
+            res.backward = !this.needsGrad() ? null : (grad) => {
+                this.backward(grad.mul(res));
+            };
+            return res;
+        }
+
         needsGrad() {
             return this.backward !== null;
         }

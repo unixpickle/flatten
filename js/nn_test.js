@@ -169,6 +169,24 @@
         console.log('[Done] pow');
     }
 
+    function testExp() {
+        const x = nn.Tensor.fromData([1, 2, 3, -1]);
+        let xGrad = null;
+        x.backward = (g) => xGrad = g;
+
+        const out = x.exp();
+        out.data.forEach((y, i) => {
+            console.assert(Math.abs(y - Math.exp(x.data[i])) < 1e-5, y, x.data[i]);
+        });
+
+        out.sum().backward(nn.Tensor.fromData(-3));
+        xGrad.data.forEach((g, i) => {
+            console.assert(Math.abs(g - -3 * out.data[i]) < 1e-5, g, x.data[i]);
+        });
+
+        console.log('[Done] exp')
+    }
+
     function testRotation() {
         for (let axis = 0; axis < 3; ++axis) {
             [-0.3, 0.3, Math.PI, Math.PI * 2].forEach((theta) => {
@@ -230,6 +248,7 @@
         testCat();
         testSinCos();
         testPow();
+        testExp();
         testRotation();
     };
 
