@@ -55,6 +55,12 @@
             return new Tensor(data, shape, null);
         }
 
+        static ones(shape) {
+            const res = Tensor.zeros(shape);
+            res.data.fill(1);
+            return res;
+        }
+
         static stackOuter(tensors) {
             tensors.forEach((x) => {
                 if (!x.shape.equals(tensors[0].shape)) {

@@ -3,31 +3,41 @@
     const nn = window.nn;
 
     class DiffusionModel {
-        constructor(params) {
+        constructor(rawParams) {
+            // Transpose weight parameters.
+            const params = {};
+            Object.keys(rawParams).forEach((k) => {
+                let v = rawParams[k];
+                if (v.shape.length === 2) {
+                    v = v.t();
+                }
+                params[k] = v;
+            });
+
             this.params = params;
             this.dModel = this.params["time_embed.2.bias"].shape[0];
-            this.dCond = this.condEmbed.params["cond_embed.0.weight"].shape[1];
-            this.timeEmbed = nn.Sequential([
-                nn.Linear(this.params["time_embed.0.weight"], this.params["time_embed.0.bias"]),
-                nn.ReLU(),
-                nn.Linear(this.params["time_embed.2.weight"], this.params["time_embed.2.bias"]),
+            this.dCond = this.params["cond_embed.0.weight"].shape[1];
+            this.timeEmbed = new nn.Sequential([
+                new nn.Linear(this.params["time_embed.0.weight"], this.params["time_embed.0.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["time_embed.2.weight"], this.params["time_embed.2.bias"]),
             ]);
-            this.condEmbed = nn.Sequential([
-                nn.Linear(this.params["cond_embed.0.weight"], this.params["cond_embed.0.bias"]),
-                nn.ReLU(),
-                nn.Linear(this.params["cond_embed.2.weight"], this.params["cond_embed.2.bias"]),
+            this.condEmbed = new nn.Sequential([
+                new nn.Linear(this.params["cond_embed.0.weight"], this.params["cond_embed.0.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["cond_embed.2.weight"], this.params["cond_embed.2.bias"]),
             ]);
-            this.inputEmbed = nn.Sequential([
-                nn.Linear(this.params["input_embed.0.weight"], this.params["input_embed.0.bias"]),
-                nn.ReLU(),
-                nn.Linear(this.params["input_embed.2.weight"], this.params["input_embed.2.bias"]),
+            this.inputEmbed = new nn.Sequential([
+                new nn.Linear(this.params["input_embed.0.weight"], this.params["input_embed.0.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["input_embed.2.weight"], this.params["input_embed.2.bias"]),
             ]);
-            this.backbone = nn.Sequential([
-                nn.Linear(this.params["backbone.0.weight"], this.params["backbone.0.bias"]),
-                nn.ReLU(),
-                nn.Linear(this.params["backbone.2.weight"], this.params["backbone.2.bias"]),
-                nn.ReLU(),
-                nn.Linear(this.params["backbone.4.weight"], this.params["backbone.4.bias"]),
+            this.backbone = new nn.Sequential([
+                new nn.Linear(this.params["backbone.0.weight"], this.params["backbone.0.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["backbone.2.weight"], this.params["backbone.2.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["backbone.4.weight"], this.params["backbone.4.bias"]),
             ]);
         }
 
@@ -63,10 +73,10 @@
 
         forward(x, t, cond) {
             const timeEmb = this.timeEmbed.forward(timestepEmbedding(t, this.dModel));
-            const inputEmb = this.inputEmbed(x);
-            const condEmb = this.condEmbed(cond);
+            const inputEmb = this.inputEmbed.forward(x);
+            const condEmb = this.condEmbed.forward(cond);
             const combined = timeEmb.add(inputEmb).add(condEmb).scale(1 / Math.sqrt(3));
-            return this.backbone(combined);
+            return this.backbone.forward(combined);
         }
     }
 
