@@ -444,6 +444,20 @@
         }
     }
 
+    class Sequential {
+        constructor(layers) {
+            this.layers = layers;
+        }
+
+        forward(x) {
+            let h = x;
+            this.layers.forEach((l) => {
+                h = l.forward(h);
+            });
+            return h;
+        }
+    }
+
     function matmul(m1, m2) {
         if (m1.shape.length !== 2 || m2.shape.length !== 2 || m1.shape[1] !== m2.shape[0]) {
             throw new Error("invalid input shapes: " + m1.shape + ", " +
@@ -549,6 +563,7 @@
         Tensor: Tensor,
         Linear: Linear,
         ReLU: ReLU,
+        Sequential: Sequential,
         matmul: matmul,
         addBias: addBias,
         rotation: rotation,
