@@ -61,6 +61,18 @@
             return res;
         }
 
+        static randn(shape) {
+            const res = Tensor.zeros(shape);
+            for (let i = 0; i < res.data.length; ++i) {
+                // https://stackoverflow.com/questions/25582882/javascript-math-random-normal-distribution-gaussian-bell-curve
+                const u = 1 - Math.random();
+                const v = Math.random();
+                const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+                res.data[i] = z;
+            }
+            return res;
+        }
+
         static stackOuter(tensors) {
             tensors.forEach((x) => {
                 if (!x.shape.equals(tensors[0].shape)) {
@@ -311,6 +323,10 @@
                 }
             };
             return res;
+        }
+
+        sub(other) {
+            return this.add(other.scale(-1));
         }
 
         mul(other) {
