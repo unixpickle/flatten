@@ -50,7 +50,7 @@
         console.log('[Done] Linear');
     }
 
-    function testSplit() {
+    function testSlice() {
         const x = nn.Tensor.fromData([
             [
                 [1, 2, 3],
@@ -69,6 +69,8 @@
                 [5, -10, -20],
             ],
         ]);
+        let xGrad = null;
+        x.backward = (g) => xGrad = g;
         console.assert(x.shape.equals(nn.Shape.make(4, 2, 3)));
 
         const chunk = x.slice(0, 1, 3);
@@ -82,7 +84,29 @@
                 [-4, -5, -6],
             ],
         ]));
-        console.log('[Done] split');
+
+        const chunk1 = x.slice(2, 1, 3);
+        chunk1.backward(chunk1.detach().scale(-1));
+        assertEqual(xGrad, nn.Tensor.fromData([
+            [
+                [0, 2, 3],
+                [0, 5, 6],
+            ],
+            [
+                [0, 8, 9],
+                [0, 11, 12],
+            ],
+            [
+                [0, -2, -3],
+                [0, -5, -6],
+            ],
+            [
+                [0, 3, 5],
+                [0, -10, -20],
+            ],
+        ]).scale(-1));
+
+        console.log('[Done] slice');
     }
 
     function testCat() {
@@ -258,7 +282,7 @@
 
     window.nn.runTests = () => {
         testLinear();
-        testSplit();
+        testSlice();
         testCat();
         testSinCos();
         testPow();

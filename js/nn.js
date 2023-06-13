@@ -300,9 +300,18 @@
                     }
                 }
             }
-            if (this.needsGrad()) {
-                throw new Error("slice does not support gradients");
-            }
+            result.backward = !this.needsGrad() ? null : (grad) => {
+                const outGrad = Tensor.zeros(this.shape);
+                for (let i = 0; i < outerSize; ++i) {
+                    for (let j = 0; j < end - start; ++j) {
+                        for (let k = 0; k < innerSize; ++k) {
+                            const c = grad.data[(i * (end - start) + j) * innerSize + k];
+                            outGrad.data[(i * midSize + j + start) * innerSize + k] = c;
+                        }
+                    }
+                }
+                this.backward(outGrad);
+            };
             return result;
         }
 
