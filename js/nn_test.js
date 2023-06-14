@@ -109,6 +109,39 @@
         console.log('[Done] slice');
     }
 
+    function testAccumGrad() {
+        const x = nn.Tensor.fromData([
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+            ],
+            [
+                [7, 8, 9],
+                [10, 11, 12],
+            ],
+            [
+                [-1, -2, -3],
+                [-4, -5, -6],
+            ],
+            [
+                [3, 3, 5],
+                [5, -10, -20],
+            ],
+        ]);
+        let xGrad = null;
+        x.backward = (g) => xGrad = g;
+
+        const combined = x.accumGrad((x) => {
+            const chunk1 = x.slice(2, 1, 3);
+            const chunk2 = x.slice(2, 0, 1);
+            return nn.Tensor.cat([chunk2, chunk1], 2);
+        });
+        combined.backward(x.scale(-3));
+        assertEqual(xGrad, x.scale(-3));
+
+        console.log('[Done] accumGrad');
+    }
+
     function testCat() {
         const x = nn.Tensor.fromData([
             [
@@ -283,6 +316,7 @@
     window.nn.runTests = () => {
         testLinear();
         testSlice();
+        testAccumGrad();
         testCat();
         testSinCos();
         testPow();

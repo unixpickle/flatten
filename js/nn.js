@@ -444,6 +444,29 @@
             copyData.set(this.data);
             return new Tensor(copyData, this.shape, this.backward);
         }
+
+        accumGrad(f) {
+            const input = this.detach();
+            let totalGrad = null;
+            input.backward = !this.needsGrad() ? null : (x) => {
+                if (!totalGrad) {
+                    totalGrad = x;
+                } else {
+                    totalGrad = totalGrad.add(x);
+                }
+            };
+
+            const output = f(input);
+            const newOutput = output.detach();
+
+            newOutput.backward = !this.needsGrad() ? null : (g) => {
+                totalGrad = null;
+                output.backward(g)
+                this.backward(totalGrad);
+            };
+
+            return newOutput;
+        }
     }
 
     class Linear {
