@@ -1,318 +1,139 @@
-class Point2 {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-    }
+(function () {
 
-    add(other) {
-        return new Point2(this.x + other.x, this.y + other.y);
-    }
+    const nn = window.nn;
 
-    sub(other) {
-        return new Point2(this.x - other.x, this.y - other.y);
-    }
-
-    scale(s) {
-        return new Point2(this.x * s, this.y * s);
-    }
-
-    norm() {
-        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
-    }
-
-    normalize() {
-        return this.scale(1 / this.norm());
-    }
-
-    dot(other) {
-        return this.x * other.x + this.y * other.y;
-    }
-
-    dist(other) {
-        return Math.sqrt(Math.pow(other.x - this.x, 2) + Math.pow(other.y - this.y, 2));
-    }
-}
-
-class Solution {
-    constructor(rotX, rotY, rotZ, camX, camY, camZ, width, height) {
-        this.rotX = rotX;
-        this.rotY = rotY;
-        this.rotZ = rotZ;
-        this.camX = camX;
-        this.camY = camY;
-        this.camZ = camZ;
-        this.width = width;
-        this.height = height;
-    }
-
-    addScaled(gradient, scale) {
-        return new Solution(
-            this.rotX + scale * gradient.rotX,
-            this.rotY + scale * gradient.rotY,
-            this.rotZ + scale * gradient.rotZ,
-            this.camX + scale * gradient.camX,
-            this.camY + scale * gradient.camY,
-            this.camZ + scale * gradient.camZ,
-            this.width + scale * gradient.width,
-            this.height + scale * gradient.height,
-        );
-    }
-
-    sign() {
-        return new Solution(
-            Math.sign(this.rotX),
-            Math.sign(this.rotY),
-            Math.sign(this.rotZ),
-            Math.sign(this.camX),
-            Math.sign(this.camY),
-            Math.sign(this.camZ),
-            Math.sign(this.width),
-            Math.sign(this.height),
-        )
-    }
-}
-
-class Camera {
-    constructor(rotation, origin) {
-        this.rotation = rotation;
-        this.origin = origin;
-    }
-
-    project(x) {
-        const point = this.rotation.mulVec(x).add(this.origin);
-        const scale = point.z.scale(-1).pow(-1);
-        return new Vector2(
-            point.x.mul(scale),
-            point.y.mul(scale),
-        );
-    }
-
-    constant(x) {
-        return this.rotation.a.constant(x);
-    }
-}
-
-class SolutionMap {
-    constructor(camera, points, cornerOffset) {
-        const v1 = points[1].sub(points[0]);
-        const v2 = points[3].sub(points[0]);
-
-        this._camera = camera;
-        this._origin = points[0];
-        this._x = v1.normalize();
-        this._y = v2.normalize();
-        this._cornerOffset = cornerOffset;
-        this.width = v1.norm().value;
-        this.height = v2.norm().value;
-    }
-
-    constant(x) {
-        return this._x.x.constant(x);
-    }
-
-    source(dst) {
-        const xOff = this._x.scale(this.constant(dst.x));
-        const yOff = this._y.scale(this.constant(dst.y));
-        const p = this._origin.add(xOff).add(yOff)
-        const proj = this._camera.project(p).add(this._cornerOffset);
-        return new Point2(proj.x.value, proj.y.value);
-    }
-}
-
-class Solver {
-    constructor(corners) {
-        this.corners = corners;
-        this.solution = new Solution(
-            // Rotations
-            0, 0, 0,
-            // Origin
-            0, 0, -1.0,
-            // Width and height
-            corners[1].dist(corners[0]),
-            corners[3].dist(corners[0]),
-        );
-        this.targetDots = cornerDots(corners).map((x) => Math.abs(x));
-        this.steps = 0;
-    }
-
-    initSearch(n) {
-        let loss = this.loss(false).value;
-        const stops = [];
-        for (let i = 0; i < n; i++) {
-            stops.push(2.0 / (n - 1) - 1);
+    class PerspectiveSolution {
+        constructor(origin, size, rotation, translation) {
+            this.origin = origin;
+            this.size = size;
+            this.rotation = rotation;
+            this.translation = translation;
         }
-        stops.forEach((rotX) => {
-            stops.forEach((rotY) => {
-                stops.forEach((rotZ) => {
-                    stops.forEach((zOff) => {
-                        stops.forEach((scaleStop) => {
-                            const z = zOff - 1.1; // Should be <= -0.1
-                            const scale = (scaleStop + 1.5); // Should be in [0.5, 2.5].
-                            const s1 = new Solution(
-                                rotX * 0.2,
-                                rotY * 0.2,
-                                rotZ * 0.2,
-                                0,
-                                0,
-                                z,
-                                this.solution.width * scale,
-                                this.solution.height * scale,
-                            );
-                            const oldSolution = this.solution;
-                            const oldStep = this.step;
-                            this.solution = s1;
-                            this.steps = 0;
-                            let newLoss;
-                            for (let i = 0; i < 2; i++) {
-                                newLoss = this.step();
-                            }
-                            if (newLoss < loss) {
-                                loss = newLoss;
-                            } else {
-                                this.solution = oldSolution;
-                                this.step = oldStep;
-                            }
-                        });
-                    });
-                });
+
+        static fromDiffusionSample(sample) {
+            if (!sample.shape.equals(nn.Shape.make(11))) {
+                throw new Error("unexpected shape for sample: " + sample.shape);
+            }
+            return new PerspectiveSolution(
+                sample.slice(0, 0, 3),
+                sample.slice(0, 3, 5),
+                sample.slice(0, 5, 8),
+                sample.slice(0, 8, 11),
+            );
+        }
+
+        iterate(corners, numIters, stepSize) {
+            let finalLoss = null;
+            let initLoss = null;
+            let solution = this;
+            for (let i = 0; i < numIters; ++i) {
+                const [loss, grad] = solution.lossAndGrad((x) => x.projectionMSE(corners));
+                solution = solution.addScaled(grad, -stepSize);
+                finalLoss = loss;
+                if (i === 0) {
+                    initLoss = loss;
+                }
+            }
+            return [solution, initLoss, finalLoss];
+        }
+
+        addScaled(gradient, scale) {
+            return new PerspectiveSolution(
+                this.origin.add(gradient.origin.scale(scale)),
+                this.size.add(gradient.size.scale(scale)),
+                this.rotation.add(gradient.rotation.scale(scale)),
+                this.translation.add(gradient.translation.scale(scale)),
+            );
+        }
+
+        lossAndGrad(lossFn) {
+            const gSolution = new PerspectiveSolution(
+                this.origin.detach(),
+                this.size.detach(),
+                this.rotation.detach(),
+                this.translation.detach(),
+            );
+            const grad = new PerspectiveSolution(null, null, null, null);
+            gSolution.origin.backward = (x) => grad.origin = x;
+            gSolution.size.backward = (x) => grad.size = x;
+            gSolution.rotation.backward = (x) => grad.rotation = x;
+            gSolution.translation.backward = (x) => grad.translation = x;
+            const loss = lossFn(gSolution);
+            loss.backward(nn.Tensor.fromData(1));
+            return [loss.data[0], grad];
+        }
+
+        projectionMSE(corners) {
+            const offsets = this.size.accumGrad((size) => {
+                const zero1 = nn.Tensor.fromData([0]);
+                const size0 = nn.Tensor.zeros(nn.Shape.make(3));
+                const sizeX = nn.Tensor.cat([size.slice(0, 0, 1), nn.Tensor.fromData([0, 0])], 0);
+                const sizeY = nn.Tensor.cat([zero1, size.slice(0, 1, 2), zero1], 0);
+                const sizeBoth = nn.Tensor.cat([size, zero1], 0);
+                return nn.Tensor.cat([
+                    size0.unsqueeze(0),
+                    sizeX.unsqueeze(0),
+                    sizeBoth.unsqueeze(0),
+                    sizeY.unsqueeze(0),
+                ], 0);
             });
-        });
-        return loss;
-    }
-
-    step() {
-        const lr = 0.01 * Math.max(0, 5000 - this.steps) / 5000 + 0.01;
-        this.steps += 1;
-        const [gradient, loss] = this.gradient();
-        this.solution = this.solution.addScaled(gradient, -lr);
-        return loss;
-    }
-
-    solutionMap() {
-        const [camera, points] = this.cameraAndPoints(false);
-        const cornerFirst = new Vector2(
-            camera.constant(this.corners[0].x),
-            camera.constant(this.corners[0].y),
-        );
-        const projFirst = camera.project(points[0]);
-        const cornerOffset = cornerFirst.sub(projFirst);
-        return new SolutionMap(camera, points, cornerOffset);
-    }
-
-    gradient() {
-        const loss = this.loss(true);
-        return [new Solution(...loss.derivatives), loss.value];
-    }
-
-    loss(derivatives) {
-        const [camera, points] = this.cameraAndPoints(derivatives);
-        const projPoints = points.map((p) => camera.project(p));
-
-        const cornerTargets = this.corners.map((c) => new Vector2(
-            camera.constant(c.x),
-            camera.constant(c.y),
-        ));
-
-        // Ignore the exact canvas position to get better MSE.
-        const cornerOffset = cornerTargets[0].sub(projPoints[0]);
-
-        let projMSE = camera.constant(0);
-        projPoints.forEach((x, i) => {
-            const diff = x.add(cornerOffset).sub(cornerTargets[i]);
-            projMSE = projMSE.add(diff.dot(diff));
-        });
-
-        const targetDots = this.targetDots.map((x) => camera.constant(x));
-        const sourceDots = cornerDots(projPoints);
-        let dotMSE = camera.constant(0);
-        sourceDots.forEach((x, i) => {
-            dotMSE = dotMSE.add(x.abs().sub(targetDots[i]).pow(2));
-        });
-
-        // Trace is equal to 1+2*cos(theta), so maximizing it
-        // reduces the rotation angle.
-        const rotTerm = camera.rotation.trace().scale(0.0);// .scale(-0.0001);
-
-        return projMSE.add(dotMSE).add(rotTerm);
-    }
-
-    cameraAndPoints(derivatives) {
-        let vars = this._vars();
-        if (!derivatives) {
-            vars = vars.map((x) => new DualNumber(x.value, []));
+            const corners3d = this.origin.unsqueeze(0).repeat(0, 4).add(offsets);
+            const rotation = this.rotation.accumGrad((angles) => {
+                let matrix = null;
+                for (let axis = 0; axis < 3; ++axis) {
+                    const angle = angles.slice(0, axis, axis + 1).reshape(new nn.Shape());
+                    const mat = nn.rotation(axis, angle);
+                    if (matrix === null) {
+                        matrix = mat;
+                    } else {
+                        matrix = nn.matmul(mat, matrix);
+                    }
+                }
+                return matrix;
+            });
+            const corners2d = cameraProject(rotation, this.translation, corners3d);
+            return corners.sub(corners2d).pow(2).mean();
         }
-        return this._cameraAndPoints(vars);
     }
 
-    _vars() {
-        return DualNumber.variables(
-            this.solution.rotX,
-            this.solution.rotY,
-            this.solution.rotZ,
-            this.solution.camX,
-            this.solution.camY,
-            this.solution.camZ,
-            this.solution.width,
-            this.solution.height,
-        );
+    function cameraProject(rotation, translation, points) {
+        const rotated = nn.matmul(rotation, points.t()).t();
+        const tx = rotated.add(translation.unsqueeze(0).repeat(0, points.shape[0]));
+        return divideByZ(tx);
     }
 
-    _cameraAndPoints(vars) {
-        const [rotX, rotY, rotZ, camX, camY, camZ, width, height] = vars;
-        const rotation = Matrix3.eulerRotation(rotX, rotY, rotZ);
-        const camOrigin = new Vector3(camX, camY, camZ);
-        const zero = rotX.constant(0);
-        const x1 = rotX.constant(this.corners[0].x);
-        const y1 = rotX.constant(this.corners[0].y);
-        return [
-            new Camera(rotation, camOrigin),
-            [
-                new Vector3(x1, y1, zero),
-                new Vector3(x1.add(width), y1, zero),
-                new Vector3(x1.add(width), y1.add(height), zero),
-                new Vector3(x1, y1.add(height), zero),
-            ],
-        ];
+    function divideByZ(coords) {
+        if (coords.shape.length !== 2 || coords.shape[1] !== 3) {
+            throw new Error("invalid coordinate batch for perspective transform");
+        }
+
+        // Accumulate input gradients from both ends of the slice.
+        // If we did not do this, multiple backward calls could flow
+        // to the coords, causing unnecessary computational cost.
+        const input = coords.detach();
+        let accumGrad = null;
+        input.backward = !coords.needsGrad() ? null : (x) => {
+            if (!accumGrad) {
+                accumGrad = x;
+            } else {
+                accumGrad = accumGrad.add(x);
+            }
+        };
+
+        const xy = input.slice(1, 0, 2);
+        const scales = input.slice(1, 2, 3).pow(-1).scale(-1).repeat(1, 2);
+        const result = xy.mul(scales);
+
+        const oldBackward = result.backward;
+        result.backward = !coords.needsGrad() ? null : (g) => {
+            accumGrad = null;
+            oldBackward.call(result, g);
+            coords.backward(accumGrad);
+        };
+
+        return result;
     }
-}
 
-function cornerDots(points) {
-    const deltas = points.map((x, i) => points[(i + 1) % points.length].sub(x).normalize());
-    return deltas.map((x, i) => x.dot(deltas[(i + 1) % deltas.length]));
-}
+    nn.PerspectiveSolution = PerspectiveSolution;
 
-function testExample() {
-    const zero = new DualNumber(0, []);
-    const camera = new Camera(
-        Matrix3.eulerRotation(zero, zero.constant(0.1), zero),
-        new Vector3(zero, zero, zero.constant(-1)),
-    );
-    const corners = [
-        new Point2(0.3, 0.3),
-        new Point2(0.45, 0.3),
-        new Point2(0.45, 0.45),
-        new Point2(0.3, 0.45),
-    ];
-
-    let projCorners = corners.map((c) => {
-        const v = new Vector3(zero.constant(c.x), zero.constant(c.y), zero);
-        const proj = camera.project(v);
-        return new Point2(proj.x.value, proj.y.value);
-    });
-    const offset = corners[0].sub(projCorners[0]);
-    projCorners = projCorners.map((x) => x.add(offset));
-
-    const solver = new Solver(projCorners);
-    solver.initSearch(5);
-    // solver.solution.rotY = 0.1;
-    // solver.solution.width = 0.15;
-    // solver.solution.height = 0.15;
-    console.log(solver.step());
-    for (let i = 0; i < 10000; i++) {
-        solver.step();
-    }
-    console.log(solver.step());
-    console.log(solver.solution);
-}
-
-testExample();
+})();

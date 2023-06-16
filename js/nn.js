@@ -234,6 +234,19 @@
             return res;
         }
 
+        mean(axis) {
+            if (typeof axis === "undefined") {
+                return this._sumAll().scale(1 / this.shape.numel());
+            }
+            if (axis < 0) {
+                axis += this.shape.length;
+            }
+            if (axis >= this.shape.length || axis < 0) {
+                throw new Error("axis " + axis + " out of range");
+            }
+            return this.sum(axis).scale(1 / this.shape[axis]);
+        }
+
         unsqueeze(axis) {
             if (axis < 0) {
                 axis += this.shape.length + 1;
