@@ -1,6 +1,6 @@
 (function () {
 
-    const nn = window.nn;
+    const nn = self.nn;
 
     class DiffusionModel {
         constructor(rawParams) {

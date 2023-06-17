@@ -156,6 +156,24 @@
             return result;
         }
 
+        toList() {
+            if (this.shape.length === 0) {
+                return this.data[0];
+            } else if (this.shape.length === 1) {
+                return Array.from(this.data);
+            } else {
+                const innerShape = this.shape.slice(1);
+                const innerSize = innerShape.numel();
+                const res = [];
+                for (let i = 0; i < this.shape[0]; ++i) {
+                    const subData = this.data.slice(i * innerSize, (i + 1) * innerSize);
+                    const inner = new Tensor(subData, innerShape, null);
+                    res.push(inner.toList());
+                }
+                return res;
+            }
+        }
+
         t() {
             if (this.shape.length !== 2) {
                 throw new Error("can only transpose 2D array");
@@ -625,7 +643,7 @@
         return result;
     }
 
-    window.nn = {
+    self.nn = {
         Shape: Shape,
         Tensor: Tensor,
         Linear: Linear,

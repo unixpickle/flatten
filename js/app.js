@@ -1,5 +1,18 @@
 class App {
     constructor() {
+        this.worker = new Worker('js/worker.js');
+        this.worker.onmessage = (e) => {
+            const msg = e.data;
+            console.log(msg);
+            if (msg["error"]) {
+                alert("Error: " + msg.error);
+            } else {
+                const solVec = nn.Tensor.fromData(msg.solution);
+                const solution = nn.PerspectiveSolution.fromFlatVec(solVec);
+                this.handleSolution(solution);
+            }
+        };
+
         this.dropZone = document.getElementById('drop-zone');
         this.canvas = document.getElementById('picker');
 
@@ -94,19 +107,16 @@ class App {
     }
 
     solve() {
-        const solver = new Solver(this._points);
-        solver.initSearch(5);
-        for (let i = 0; i < 10000; i++) {
-            const loss = solver.step();
-            if (i % 1000 == 0) {
-                console.log(i, loss, solver.solution);
-            }
-        }
-        const source = this.pixelSource();
-        const map = solver.solutionMap();
+        this.worker.postMessage({
+            points: this._points.map((p) => [p.x, p.y])
+        });
+    }
 
-        const w = map.width;
-        const h = map.height;
+    handleSolution(solution) {
+        const source = this.pixelSource();
+        const projector = solution.projector();
+
+        const [w, h] = solution.size.toList();
         const scale = Math.min(200 / w, 200 / h);
 
         const dstCanvas = document.createElement('canvas');
@@ -118,7 +128,7 @@ class App {
         for (let x = 0; x < dstCanvas.width; x++) {
             for (let y = 0; y < dstCanvas.height; y++) {
                 const dstPoint = new Point2(x / scale, y / scale);
-                const sourcePoint = map.source(dstPoint);
+                const sourcePoint = projector(dstPoint);
                 const sourcePixel = source(sourcePoint.x, sourcePoint.y);
                 const idx = (x + y * dstCanvas.width) * 4;
                 for (let i = 0; i < 4; i++) {
@@ -155,5 +165,12 @@ class App {
             const index = (x + y * extractionCanvas.width) * 4;
             return data.data.slice(index, index + 4);
         };
+    }
+}
+
+class Point2 {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
     }
 }

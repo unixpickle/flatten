@@ -1,6 +1,6 @@
 (function () {
 
-    const nn = window.nn;
+    const nn = self.nn;
 
     function testLinear() {
         const weights = nn.Tensor.fromData([
@@ -313,7 +313,7 @@
         console.assert(!bad, t1.data, t2.data);
     }
 
-    window.nn.runTests = () => {
+    self.nn.runTests = () => {
         testLinear();
         testSlice();
         testAccumGrad();

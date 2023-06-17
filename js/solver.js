@@ -1,6 +1,6 @@
 (function () {
 
-    const nn = window.nn;
+    const nn = self.nn;
 
     class PerspectiveSolution {
         constructor(origin, size, rotation, translation) {
@@ -10,7 +10,7 @@
             this.translation = translation;
         }
 
-        static fromDiffusionSample(sample) {
+        static fromFlatVec(sample) {
             if (!sample.shape.equals(nn.Shape.make(11))) {
                 throw new Error("unexpected shape for sample: " + sample.shape);
             }
@@ -20,6 +20,10 @@
                 sample.slice(0, 5, 8),
                 sample.slice(0, 8, 11),
             );
+        }
+
+        toFlatVec() {
+            return nn.Tensor.cat([this.origin, this.size, this.rotation, this.translation], 0);
         }
 
         iterate(corners, numIters, stepSize) {
@@ -63,6 +67,17 @@
             return [loss.data[0], grad];
         }
 
+        projector() {
+            const rot = this.rotationMatrix();
+            return (p) => {
+                const [w, h] = this.size.toList();
+                const [ox, oy, oz] = this.origin.toList();
+                const point3d = nn.Tensor.fromData([[ox + p.x * w, oy + p.y * h, oz]]);
+                const proj = cameraProject(rot, this.translation, point3d);
+                return { x: proj.data[0], y: proj.data[1] };
+            };
+        }
+
         projectionMSE(corners) {
             const offsets = this.size.accumGrad((size) => {
                 const zero1 = nn.Tensor.fromData([0]);
@@ -78,7 +93,13 @@
                 ], 0);
             });
             const corners3d = this.origin.unsqueeze(0).repeat(0, 4).add(offsets);
-            const rotation = this.rotation.accumGrad((angles) => {
+            const rotation = this.rotationMatrix();
+            const corners2d = cameraProject(rotation, this.translation, corners3d);
+            return corners.sub(corners2d).pow(2).mean();
+        }
+
+        rotationMatrix() {
+            return this.rotation.accumGrad((angles) => {
                 let matrix = null;
                 for (let axis = 0; axis < 3; ++axis) {
                     const angle = angles.slice(0, axis, axis + 1).reshape(new nn.Shape());
@@ -91,8 +112,6 @@
                 }
                 return matrix;
             });
-            const corners2d = cameraProject(rotation, this.translation, corners3d);
-            return corners.sub(corners2d).pow(2).mean();
         }
     }
 
