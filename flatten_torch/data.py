@@ -73,33 +73,38 @@ class Batch:
         margin: float,
         z_near: float,
     ) -> "Batch":
-        euler_angles = (
-            torch.rand(size=(max_batch, 3), generator=generator, device=device) - 0.5
-        ) * math.pi
+        euler_angles = torch.randn(
+            size=(max_batch, 3), generator=generator, device=device
+        ) * torch.tensor([0.75, 0.75, 0.2], device=device)
         origin = (
-            torch.rand(size=(max_batch, 3), generator=generator, device=device) * 5
-            - 2.5
+            torch.rand(size=(max_batch, 3), generator=generator, device=device) * 10 - 5
         )
         origin[..., 2] = 0
         size = (
-            torch.rand(size=(max_batch, 2), generator=generator, device=device) + 0.01
+            torch.rand(size=(max_batch, 2), generator=generator, device=device) * 5
+            + 0.01
         )
         translation = torch.rand(
             size=(max_batch, 3), generator=generator, device=device
         )
-        translation[..., :2] *= 5
-        translation[..., :2] -= 2.5
-        translation[..., 2] = -(0.1 + translation[..., 2] * 5)
+        translation[..., :2] *= 10
+        translation[..., :2] -= 5
+        translation[..., 2] = -(z_near + translation[..., 2] * 10)
 
         corners = corners_on_zplane(origin, size)
         camera = Camera(rotation=euler_rotation(euler_angles), translation=translation)
         proj = camera.project(corners)
+        areas = areas_of_corners(proj.projected)
+        area_thresh = torch.randn(
+            size=areas.shape, generator=generator, device=device
+        ).pow(0.75)
         valid = (
             (proj.projected[..., 0] >= -margin)
             & (proj.projected[..., 0] <= 1 + margin)
             & (proj.projected[..., 1] >= -margin)
             & (proj.projected[..., 1] <= 1 + margin)
             & (proj.z[..., 0] < -z_near)
+            & (areas > area_thresh)[..., None]
         ).all(-1)
 
         return cls(
@@ -109,6 +114,21 @@ class Batch:
             translation=translation[valid],
             proj_corners=proj.projected[valid],
         )
+
+
+def areas_of_corners(corners: torch.Tensor) -> torch.Tensor:
+    """
+    Get the area of N quadrilaterals passed as an [N x 4 x 2] tensor.
+    """
+
+    def tri_area(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+        return 0.5 * (v1[:, 0] * v2[:, 1] - v1[:, 1] * v2[:, 0]).abs()
+
+    v1 = corners[:, 1] - corners[:, 0]
+    v2 = corners[:, 3] - corners[:, 0]
+    v3 = corners[:, 1] - corners[:, 2]
+    v4 = corners[:, 3] - corners[:, 2]
+    return tri_area(v1, v2) + tri_area(v3, v4)
 
 
 def corners_on_zplane(origin: torch.Tensor, size: torch.Tensor) -> torch.Tensor:
