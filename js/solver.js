@@ -70,9 +70,8 @@
         projector() {
             const rot = this.rotationMatrix();
             return (p) => {
-                const [w, h] = this.size.toList();
                 const [ox, oy, oz] = this.origin.toList();
-                const point3d = nn.Tensor.fromData([[ox + p.x * w, oy + p.y * h, oz]]);
+                const point3d = nn.Tensor.fromData([[ox + p.x, oy + p.y, oz]]);
                 const proj = cameraProject(rot, this.translation, point3d);
                 return { x: proj.data[0], y: proj.data[1] };
             };
