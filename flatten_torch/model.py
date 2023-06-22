@@ -70,3 +70,33 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     if dim % 2:
         embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return embedding
+
+
+class StretchPredictor(nn.Module):
+    def __init__(self, device: torch.device):
+        super().__init__()
+        self.register_buffer("ratios", torch.linspace(-3, 3, 25, device=device).exp())
+        self.layers = nn.Sequential(
+            nn.Conv2d(3, 64, 3, 2, padding=1, device=device),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, 3, 2, padding=1, device=device),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, 3, 2, padding=1, device=device),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, padding=1, device=device),
+            nn.ReLU(),
+            nn.AvgPool2d(8, 8),
+            nn.Flatten(),
+            nn.Linear(256, len(self.ratios), device=device),
+        )
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        return self.layers(images)
+
+    def losses(self, images: torch.Tensor, ratios: torch.Tensor) -> torch.Tensor:
+        log_ratios = ratios.log()
+        indices = torch.argmin(
+            (log_ratios[:, None] - self.ratios.log()).abs(), dim=-1, keepdim=True
+        )
+        log_probs = self(images).log_softmax(-1).gather(1, indices)
+        return -log_probs.view(-1)
