@@ -399,6 +399,14 @@
             return res;
         }
 
+        addScalar(s) {
+            const res = this.clone();
+            for (let i = 0; i < res.data.length; ++i) {
+                res.data[i] = res.data[i] + s;
+            }
+            return res;
+        }
+
         sin() {
             const res = this.detach().clone();
             for (let i = 0; i < res.data.length; ++i) {

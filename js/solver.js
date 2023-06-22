@@ -22,6 +22,15 @@
             );
         }
 
+        static zeros() {
+            return new PerspectiveSolution(
+                nn.Tensor.zeros(nn.Shape.make(3)),
+                nn.Tensor.zeros(nn.Shape.make(2)),
+                nn.Tensor.zeros(nn.Shape.make(3)),
+                nn.Tensor.zeros(nn.Shape.make(3)),
+            );
+        }
+
         toFlatVec() {
             return nn.Tensor.cat([this.origin, this.size, this.rotation, this.translation], 0);
         }
@@ -29,16 +38,16 @@
         iterate(corners, numIters, stepSize) {
             let finalLoss = null;
             let initLoss = null;
-            let solution = this;
+            const opt = new AdamOptimizer(stepSize);
             for (let i = 0; i < numIters; ++i) {
-                const [loss, grad] = solution.lossAndGrad((x) => x.projectionMSE(corners));
-                solution = solution.addScaled(grad, -stepSize);
+                const [loss, grad] = this.lossAndGrad((x) => x.projectionMSE(corners));
+                opt.update(this, grad);
                 finalLoss = loss;
                 if (i === 0) {
                     initLoss = loss;
                 }
             }
-            return [solution, initLoss, finalLoss];
+            return [initLoss, finalLoss];
         }
 
         addScaled(gradient, scale) {
@@ -110,6 +119,33 @@
                     }
                 }
                 return matrix;
+            });
+        }
+    }
+
+    class AdamOptimizer {
+        constructor(lr, beta1, beta2, epsilon) {
+            this.lr = lr;
+            this.beta1 = typeof beta1 === "undefined" ? 0.9 : beta1;
+            this.beta2 = typeof beta2 === "undefined" ? 0.999 : beta2;
+            this.epsilon = typeof epsilon === "undefined" ? 0.00000001 : epsilon;
+
+            this.moment1 = PerspectiveSolution.zeros();
+            this.moment2 = PerspectiveSolution.zeros();
+            this.t = 0;
+        }
+
+        update(solution, gradient) {
+            this.t += 1;
+            const scale1 = -this.lr / (this.t - this.beta1);
+            const scale2 = 1 / (this.t - this.beta2);
+            ['origin', 'size', 'rotation', 'translation'].forEach((k) => {
+                this.moment1[k] = this.moment1[k].scale(this.beta1)
+                    .add(gradient[k].scale(1 - this.beta1));
+                this.moment2[k] = this.moment2[k].scale(this.beta2)
+                    .add(gradient[k].pow(2).scale(1 - this.beta2));
+                const ratio = this.moment1[k].scale(scale1).mul(this.moment2[k].scale(scale2).pow(0.5).addScalar(this.epsilon).pow(-1))
+                solution[k] = solution[k].add(ratio);
             });
         }
     }

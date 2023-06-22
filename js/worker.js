@@ -32,12 +32,12 @@ async function solve(cornerData) {
     let bestSolution = null;
     for (let i = 0; i < attempts; ++i) {
         const row = samples.slice(0, i, i + 1).reshape(nn.Shape.make(-1));
-        const initSol = nn.PerspectiveSolution.fromFlatVec(row);
-        const [finalSol, initLoss, finalLoss] = initSol.iterate(corners, ITERATIONS, STEP_SIZE);
+        const solution = nn.PerspectiveSolution.fromFlatVec(row);
+        const [initLoss, finalLoss] = solution.iterate(corners, ITERATIONS, STEP_SIZE);
         console.log(initLoss, finalLoss);
         if (bestLoss === null || finalLoss < bestLoss) {
             bestLoss = finalLoss;
-            bestSolution = finalSol;
+            bestSolution = solution;
         }
     }
     return bestSolution.toFlatVec().toList();
