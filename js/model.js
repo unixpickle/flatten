@@ -38,6 +38,12 @@
                 new nn.Linear(this.params["backbone.2.weight"], this.params["backbone.2.bias"]),
                 new nn.ReLU(),
                 new nn.Linear(this.params["backbone.4.weight"], this.params["backbone.4.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["backbone.6.weight"], this.params["backbone.6.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["backbone.8.weight"], this.params["backbone.8.bias"]),
+                new nn.ReLU(),
+                new nn.Linear(this.params["backbone.10.weight"], this.params["backbone.10.bias"]),
             ]);
         }
 
@@ -66,8 +72,14 @@
                 "backbone.0.bias": nn.Tensor.zeros(Shape.from(512)),
                 "backbone.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
                 "backbone.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.4.weight": nn.Tensor.zeros(Shape.from(22, 512)),
-                "backbone.4.bias": nn.Tensor.zeros(Shape.from(22)),
+                "backbone.4.weight": nn.Tensor.zeros(Shape.from(512, 512)),
+                "backbone.4.bias": nn.Tensor.zeros(Shape.from(512)),
+                "backbone.6.weight": nn.Tensor.zeros(Shape.from(512, 512)),
+                "backbone.6.bias": nn.Tensor.zeros(Shape.from(512)),
+                "backbone.8.weight": nn.Tensor.zeros(Shape.from(512, 512)),
+                "backbone.8.bias": nn.Tensor.zeros(Shape.from(512)),
+                "backbone.10.weight": nn.Tensor.zeros(Shape.from(22, 512)),
+                "backbone.10.bias": nn.Tensor.zeros(Shape.from(22)),
             });
         }
 

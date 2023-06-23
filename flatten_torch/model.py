@@ -37,6 +37,12 @@ class DiffusionPredictor(nn.Module):
             nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
             nn.ReLU(),
+            nn.Linear(d_model, d_model, device=device),
+            nn.ReLU(),
+            nn.Linear(d_model, d_model, device=device),
+            nn.ReLU(),
+            nn.Linear(d_model, d_model, device=device),
+            nn.ReLU(),
             nn.Linear(d_model, d_input * 2, device=device),
         )
 
