@@ -2,6 +2,35 @@
 
     const nn = self.nn;
 
+    function testTranspose() {
+        const data = nn.Tensor.fromData([
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+            ],
+            [
+                [-3, -5, -7],
+                [-4, -2, -1],
+            ]
+        ]);
+        const out = data.t();
+        const expected = nn.Tensor.fromData([
+            [
+                [1, 4],
+                [2, 5],
+                [3, 6],
+            ],
+            [
+                [-3, -4],
+                [-5, -2],
+                [-7, -1],
+            ]
+        ]);
+        assertEqual(out, expected);
+
+        console.log('[Done] transpose');
+    }
+
     function testLinear() {
         const weights = nn.Tensor.fromData([
             [1, 2, 3],
@@ -314,6 +343,7 @@
     }
 
     self.nn.runTests = () => {
+        testTranspose();
         testLinear();
         testSlice();
         testAccumGrad();

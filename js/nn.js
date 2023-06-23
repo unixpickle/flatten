@@ -175,13 +175,29 @@
         }
 
         t() {
-            if (this.shape.length !== 2) {
-                throw new Error("can only transpose 2D array");
+            if (this.shape.length !== 2 && this.shape.length !== 3) {
+                throw new Error("can only transpose 2D or 3D array");
             }
-            const result = Tensor.zeros(Shape.make(this.shape[1], this.shape[0]));
-            for (let i = 0; i < this.shape[0]; ++i) {
-                for (let j = 0; j < this.shape[1]; ++j) {
-                    result.data[i + j * this.shape[0]] = this.data[i * this.shape[1] + j];
+            let result;
+            if (this.shape.length === 2) {
+                result = Tensor.zeros(Shape.make(this.shape[1], this.shape[0]));
+                for (let i = 0; i < this.shape[0]; ++i) {
+                    for (let j = 0; j < this.shape[1]; ++j) {
+                        result.data[i + j * this.shape[0]] = this.data[i * this.shape[1] + j];
+                    }
+                }
+            } else if (this.shape.length === 3) {
+                result = Tensor.zeros(
+                    Shape.make(this.shape[0], this.shape[2], this.shape[1]),
+                );
+                for (let i = 0; i < this.shape[0]; ++i) {
+                    for (let j = 0; j < this.shape[1]; ++j) {
+                        for (let k = 0; k < this.shape[2]; ++k) {
+                            const src = (i * this.shape[1] + j) * this.shape[2] + k;
+                            const dst = (i * result.shape[1] + k) * result.shape[2] + j;
+                            result.data[dst] = this.data[src];
+                        }
+                    }
                 }
             }
             result.backward = !this.needsGrad() ? null : (grad) => {
