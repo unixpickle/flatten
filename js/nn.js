@@ -600,6 +600,91 @@
         return new Tensor(product, Shape.make(m1.shape[0], m2.shape[1]), backward);
     }
 
+    function conv2d(weight, bias, images, stride) {
+        if (
+            weight.shape.length !== 4 ||
+            bias.shape.length !== 1 ||
+            images.shape.length !== 4 ||
+            weight.shape[1] !== images.shape[1] ||
+            weight.shape[0] !== bias.shape[0]
+        ) {
+            throw new Error("invalid shapes: weight=" + weight + " bias=" + bias + " images=" + images);
+        }
+        const padded = zeroPadImage(images);
+        const patches = imagePatches(padded, weight.shape[2], weight.shape[3], stride);
+
+        // output shape [B * H * W x C]
+        const wOut = matmul(
+            patches.reshape(Shape.make(-1, patches.shape[3])), // [B*H*W x P]
+            weight.reshape(Shape.make(weight.shape[0], -1)).t(), // [P x C]
+        );
+        const bOut = wOut.add(bias.unsqueeze(0).repeat(0, wOut.shape[0]));
+
+        // Convert result into [B x C x H x W]
+        return bOut
+            .reshape(Shape.make(patches.shape[0], patches.shape[1] * patches.shape[2], -1))
+            .t()
+            .reshape(Shape.make(patches.shape[0], -1, patches.shape[1], patches.shape[2]));
+
+    }
+
+    function zeroPadImage(images) {
+        const shape = Shape.make(images.shape[0], images.shape[1], images.shape[2] + 2, images.shape[3] + 2);
+        const results = Tensor.zeros(shape);
+        for (let i = 0; i < images.shape[0]; i++) {
+            for (let j = 0; j < images.shape[1]; j++) {
+                for (let k = 0; k < images.shape[2]; k++) {
+                    for (let l = 0; l < images.shape[3]; l++) {
+                        const src = (((i * images.shape[1]) + j) * images.shape[2] + k) *
+                            images.shape[3] + l;
+                        const dst = (((i * shape[1]) + j) * shape[2] + k) * shape[3] + l;
+                        results.data[dst] = images.data[src];
+                    }
+                }
+            }
+        }
+        if (images.needsGrad()) {
+            results.backward = (g) => {
+                throw new Error("backward not supported for zero padding");
+            }
+        }
+        return results;
+    }
+
+    function imagePatches(images, patchH, patchW, stride) {
+        const h = Math.floor((images.shape[2] - patchH) / stride + 1);
+        const w = Math.floor((images.shape[3] - patchW) / stride + 1);
+        const outShape = Shape.make(images.shape[0], h, w, images.shape[1] * patchH * patchW);
+        const output = Tensor.zeros(outShape);
+        for (let b = 0; b <= images.shape[0]; b++) {
+            for (let i = 0; i <= h; i++) {
+                for (let j = 0; j <= w; j++) {
+
+                    // Loop over inner patch.
+                    let outIdx = ((b * h + i) * w + j) * outShape[3];
+                    for (let c = 0; c < images.shape[1]; c++) {
+                        for (let dy = 0; dy < patchH; dy++) {
+                            const y = dy + i * stride;
+                            for (let dx = 0; dx < patchW; dx++) {
+                                const x = dx + j * stride;
+                                const src = ((b * images.shape[1] + c) * images.shape[2] + y) *
+                                    images.shape[3] + x;
+                                output.data[outIdx++] = images.data[src];
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+        if (images.needsGrad()) {
+            results.backward = (g) => {
+                throw new Error("backward not supported for convolutional patching");
+            }
+        }
+        return output;
+    }
+
     function addBias(x, y) {
         if (x.shape.length !== 2 || y.shape.length !== 1 || x.shape[1] !== y.shape[0]) {
             throw new Error("invalid shapes: " + x.shape + ", " + y.shape);
@@ -674,6 +759,7 @@
         ReLU: ReLU,
         Sequential: Sequential,
         matmul: matmul,
+        conv2d: conv2d,
         addBias: addBias,
         rotation: rotation,
     };
