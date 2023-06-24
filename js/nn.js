@@ -637,7 +637,7 @@
                     for (let l = 0; l < images.shape[3]; l++) {
                         const src = (((i * images.shape[1]) + j) * images.shape[2] + k) *
                             images.shape[3] + l;
-                        const dst = (((i * shape[1]) + j) * shape[2] + k) * shape[3] + l;
+                        const dst = (((i * shape[1]) + j) * shape[2] + k + 1) * shape[3] + l + 1;
                         results.data[dst] = images.data[src];
                     }
                 }
