@@ -5,14 +5,11 @@ Train a model to predict the original aspect ratio of photos given a square resi
 import argparse
 import glob
 import os
-from typing import Tuple
 
 import torch
-import torch.nn as nn
-from PIL import Image
+from PIL import Image, ImageFile
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
-from torchvision.datasets import ImageFolder
 from torchvision.transforms import Resize, ToTensor
 
 from flatten_torch.model import StretchPredictor
@@ -40,7 +37,7 @@ def main():
     while True:
         for inputs, targets in loader:
             i += 1
-            loss = model.losses(inputs, targets).mean()
+            loss = model.losses(inputs.to(device), targets.to(device)).mean()
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -58,10 +55,12 @@ class StretchDataset(Dataset):
         self.torchify = ToTensor()
 
     def __getitem__(self, index: int):
-        image = Image.open(self.image_paths[index])
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+        image = Image.open(self.image_paths[index]).convert("RGB")
         orig_shape = self.torchify(image).shape
         img = self.torchify(self.resize(image))
-        size = orig_shape[1] / orig_shape[0]
+        size = orig_shape[1] / orig_shape[2]
         return img, torch.tensor(size, dtype=torch.float32)
 
     def __len__(self):
