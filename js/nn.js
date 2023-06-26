@@ -544,6 +544,31 @@
         }
     }
 
+    class Conv2d {
+        constructor(weight, bias, stride) {
+            this.weight = weight;
+            this.bias = bias;
+            this.stride = stride || 1;
+            if (
+                weight.shape.length !== 4 ||
+                bias.shape.length !== 1 ||
+                bias.shape[0] != weight.shape[0]
+            ) {
+                throw new Error("invalid shapes: " + weight.shape + ", " + bias.shape);
+            }
+        }
+
+        forward(x) {
+            return conv2d(this.weight, this.bias, x, this.stride);
+        }
+    }
+
+    class AvgAndFlatten {
+        forward(x) {
+            return x.reshape(Shape.make(x.shape[0], x.shape[1], -1)).mean(2);
+        }
+    }
+
     class ReLU {
         constructor() {
         }
@@ -756,6 +781,8 @@
         Shape: Shape,
         Tensor: Tensor,
         Linear: Linear,
+        Conv2d: Conv2d,
+        AvgAndFlatten: AvgAndFlatten,
         ReLU: ReLU,
         Sequential: Sequential,
         matmul: matmul,

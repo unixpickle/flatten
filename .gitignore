@@ -3,3 +3,4 @@ __pycache__
 .DS_Store
 diffusion_model.pt
 weights.json
+stretch.json

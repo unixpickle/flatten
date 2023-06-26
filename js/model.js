@@ -4,16 +4,7 @@
 
     class DiffusionModel {
         constructor(rawParams) {
-            // Transpose weight parameters.
-            const params = {};
-            Object.keys(rawParams).forEach((k) => {
-                let v = rawParams[k];
-                if (v.shape.length === 2) {
-                    v = v.t();
-                }
-                params[k] = v;
-            });
-
+            const params = transposeWeights(rawParams);
             this.params = params;
             this.dModel = this.params["time_embed.2.bias"].shape[0];
             this.dCond = this.params["cond_embed.0.weight"].shape[1];
@@ -106,7 +97,70 @@
         return embedding;
     }
 
+    class StretchModel {
+        constructor(rawParams) {
+            const params = transposeWeights(rawParams);
+            this.params = params;
+            this.backbone = new nn.Sequential([
+                new nn.Conv2d(params['layers.0.weight'], params['layers.0.bias'], 2),
+                new nn.ReLU(),
+                new nn.Conv2d(params['layers.2.weight'], params['layers.2.bias'], 2),
+                new nn.ReLU(),
+                new nn.Conv2d(params['layers.4.weight'], params['layers.4.bias'], 2),
+                new nn.ReLU(),
+                new nn.Conv2d(params['layers.6.weight'], params['layers.6.bias']),
+                new nn.ReLU(),
+                new nn.AvgAndFlatten(),
+                new nn.Linear(params['layers.10.weight'], params['layers.10.bias']),
+            ]);
+            this.ratios = params['ratios'];
+        }
+
+        static async load(path) {
+            const data = await (await fetch(path)).json();
+            const params = {};
+            Object.keys(data).forEach((k) => params[k] = nn.Tensor.fromData(data[k]));
+            return new StretchModel(params);
+        }
+
+        forward(x) {
+            return this.backbone.forward(x);
+        }
+
+        predict(x) {
+            const logits = this.forward(x);
+            const results = [];
+            let offset = 0;
+            for (let i = 0; i < logits.shape[0]; ++i) {
+                let maxIndex = 0;
+                let maxValue = logits.data[offset];
+                for (let j = 0; j < logits.shape[1]; ++j) {
+                    const x = logits.data[offset++];
+                    if (x > maxValue) {
+                        maxValue = x;
+                        maxIndex = j;
+                    }
+                }
+                results.push(this.ratios.data[maxIndex]);
+            }
+            return nn.Tensor.fromData([results]);
+        }
+    }
+
+    function transposeWeights(rawParams) {
+        const params = {};
+        Object.keys(rawParams).forEach((k) => {
+            let v = rawParams[k];
+            if (v.shape.length === 2) {
+                v = v.t();
+            }
+            params[k] = v;
+        });
+        return params
+    }
+
     nn.DiffusionModel = DiffusionModel;
     nn.timestepEmbedding = timestepEmbedding;
+    nn.StretchModel = StretchModel;
 
 })();
