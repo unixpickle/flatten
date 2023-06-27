@@ -5,11 +5,11 @@ importScripts(
     'solver.js',
 );
 
-const ITERATIONS = 1000;
+const ITERATIONS = 10000;
 const STEP_SIZE = 0.001;
 
 let diffusion = nn.GaussianDiffusion.linearDiffusion128();
-let model = null;
+let diffusionModel = null;
 
 onmessage = (event) => {
     const cornerData = event.data.points;
@@ -24,7 +24,7 @@ async function solve(cornerData) {
     const corners = nn.Tensor.fromData(cornerData);
     const attempts = 4;
     const samples = diffusion.ddimSample(
-        await getModel(),
+        await getDiffusionModel(),
         nn.Tensor.randn(nn.Shape.make(attempts, 11)),
         corners.reshape(nn.Shape.make(1, -1)).repeat(0, attempts),
     );
@@ -43,10 +43,10 @@ async function solve(cornerData) {
     return bestSolution.toFlatVec().toList();
 }
 
-async function getModel() {
-    if (model !== null) {
-        return model;
+async function getDiffusionModel() {
+    if (diffusionModel !== null) {
+        return diffusionModel;
     }
-    model = await nn.DiffusionModel.load('../models/weights.json');
-    return model;
+    diffusionModel = await nn.DiffusionModel.load('../models/diffusion.json');
+    return diffusionModel;
 }
