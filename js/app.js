@@ -160,10 +160,29 @@ class App {
 
         const data = ctx.getImageData(0, 0, extractionCanvas.width, extractionCanvas.height);
         return (relX, relY) => {
-            const x = Math.round(Math.max(0, Math.min(1, relX)) * extractionCanvas.width);
-            const y = Math.round(Math.max(0, Math.min(1, relY)) * extractionCanvas.height);
-            const index = (x + y * extractionCanvas.width) * 4;
-            return data.data.slice(index, index + 4);
+            const eps = 1e-5; // make sure to never go out of bounds
+            const x = Math.max(0, Math.min(1, relX)) * (extractionCanvas.width - 1 - eps);
+            const y = Math.max(0, Math.min(1, relY)) * (extractionCanvas.height - 1 - eps);
+            const minX = Math.floor(x);
+            const minY = Math.floor(y);
+
+            const fracX = x - minX;
+            const fracY = y - minY;
+
+            const result = [0, 0, 0, 0];
+            for (let i = 0; i < 2; i++) {
+                const wy = (i === 0 ? 1 - fracY : fracY);
+                for (let j = 0; j < 2; j++) {
+                    const wx = (j === 0 ? 1 - fracX : fracX);
+                    const w = wx * wy;
+                    const offset = ((minX + j) + (minY + i) * extractionCanvas.width) * 4;
+                    for (let k = 0; k < 4; k++) {
+                        result[k] += w * data.data[offset + k];
+                    }
+                }
+            }
+
+            return result.map((x) => Math.round(x));
         };
     }
 }
