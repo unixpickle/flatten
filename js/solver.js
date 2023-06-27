@@ -137,8 +137,8 @@
 
         update(solution, gradient) {
             this.t += 1;
-            const scale1 = -this.lr / (this.t - this.beta1);
-            const scale2 = 1 / (this.t - this.beta2);
+            const scale1 = -this.lr / (1 - Math.pow(this.beta1, this.t));
+            const scale2 = 1 / (1 - Math.pow(this.beta2, this.t));
             ['origin', 'size', 'rotation', 'translation'].forEach((k) => {
                 this.moment1[k] = this.moment1[k].scale(this.beta1)
                     .add(gradient[k].scale(1 - this.beta1));
