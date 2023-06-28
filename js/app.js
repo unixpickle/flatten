@@ -1,25 +1,29 @@
 class App {
     constructor() {
-        this.worker = new Worker('js/worker.js');
+        this.worker = new Worker("js/worker.js");
         this.worker.onmessage = (e) => {
             const msg = e.data;
             console.log(msg);
             if (msg["error"]) {
                 alert("Error: " + msg.error);
             } else {
-                const solVec = nn.Tensor.fromData(msg.solution);
-                const solution = nn.PerspectiveSolution.fromFlatVec(solVec);
-                this.handleSolution(solution);
+                if (msg["solution"]) {
+                    const solVec = nn.Tensor.fromData(msg.solution);
+                    const solution = nn.PerspectiveSolution.fromFlatVec(solVec);
+                    this.handleSolution(solution);
+                } else if (msg["stretch"]) {
+                    this.handleStretch(msg["stretch"][0]);
+                }
             }
         };
 
-        this.dropZone = document.getElementById('drop-zone');
-        this.canvas = document.getElementById('picker');
+        this.dropZone = document.getElementById("drop-zone");
+        this.canvas = document.getElementById("picker");
 
-        this.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e), false);
-        this.dropZone.addEventListener('drop', (e) => this.handleFileSelect(e), false);
+        this.dropZone.addEventListener("dragover", (e) => this.handleDragOver(e), false);
+        this.dropZone.addEventListener("drop", (e) => this.handleFileSelect(e), false);
 
-        this.canvas.addEventListener('mousedown', (e) => {
+        this.canvas.addEventListener("mousedown", (e) => {
             if (this._points.length === 4) {
                 this._points = [];
             }
@@ -43,12 +47,16 @@ class App {
 
         // Points for fitting.
         this._points = [];
+
+        // During the solver process.
+        this._solution = null;
+        this._stretch = null;
     }
 
     handleDragOver(evt) {
         evt.stopPropagation();
         evt.preventDefault();
-        evt.dataTransfer.dropEffect = 'copy';
+        evt.dataTransfer.dropEffect = "copy";
     }
 
     handleFileSelect(evt) {
@@ -57,7 +65,7 @@ class App {
 
         var files = evt.dataTransfer.files;
         for (let i = 0, f; f = files[i]; i++) {
-            if (!f.type.match('image.*')) {
+            if (!f.type.match("image.*")) {
                 continue;
             }
 
@@ -78,8 +86,8 @@ class App {
                 };
                 img.src = e.target.result;
 
-                this.dropZone.style.display = 'none';
-                this.canvas.style.display = 'block';
+                this.dropZone.style.display = "none";
+                this.canvas.style.display = "block";
             };
 
             reader.readAsDataURL(f);
@@ -87,7 +95,7 @@ class App {
     }
 
     draw() {
-        const ctx = this.canvas.getContext('2d');
+        const ctx = this.canvas.getContext("2d");
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         ctx.drawImage(
             this._img,
@@ -99,7 +107,7 @@ class App {
         this._points.forEach((p) => {
             const x = this.canvas.width * p.x;
             const y = this.canvas.height * p.y;
-            ctx.fillStyle = 'green';
+            ctx.fillStyle = "green";
             ctx.beginPath();
             ctx.arc(x, y, 5.0, 0, Math.PI * 2, false);
             ctx.fill();
@@ -113,31 +121,28 @@ class App {
     }
 
     handleSolution(solution) {
-        const source = this.pixelSource();
-        const projector = solution.projector();
+        this._solution = solution;
+        const dstCanvas = document.createElement("canvas");
+        dstCanvas.width = 64;
+        dstCanvas.height = 64;
+        extractProjectedImage(solution, this.pixelSource(), dstCanvas);
+        const imageData = canvasToTensor(dstCanvas).toList();
+        this.worker.postMessage({ image: imageData });
+        document.body.appendChild(dstCanvas);
+    }
 
-        const [w, h] = solution.size.toList();
+    handleStretch(stretch) {
+        console.log("got stretch:", stretch);
+        this._stretch = stretch;
+
+        const w = 1;
+        const h = stretch;
         const scale = Math.min(200 / w, 200 / h);
 
-        const dstCanvas = document.createElement('canvas');
+        const dstCanvas = document.createElement("canvas");
         dstCanvas.width = Math.ceil(w * scale);
         dstCanvas.height = Math.ceil(h * scale);
-        const dst = dstCanvas.getContext('2d');
-        const imgData = dst.createImageData(dstCanvas.width, dstCanvas.height);
-
-        for (let x = 0; x < dstCanvas.width; x++) {
-            for (let y = 0; y < dstCanvas.height; y++) {
-                const dstPoint = new Point2(x / scale, y / scale);
-                const sourcePoint = projector(dstPoint);
-                const sourcePixel = source(sourcePoint.x, sourcePoint.y);
-                const idx = (x + y * dstCanvas.width) * 4;
-                for (let i = 0; i < 4; i++) {
-                    imgData.data[idx + i] = sourcePixel[i];
-                }
-            }
-        }
-
-        dst.putImageData(imgData, 0, 0);
+        extractProjectedImage(this._solution, this.pixelSource(), dstCanvas);
         document.body.appendChild(dstCanvas);
     }
 
@@ -146,10 +151,10 @@ class App {
             this._img.width / this.canvas.width,
             this._img.height / this.canvas.height,
         );
-        const extractionCanvas = document.createElement('canvas');
+        const extractionCanvas = document.createElement("canvas");
         extractionCanvas.width = this.canvas.width * scale;
         extractionCanvas.height = this.canvas.height * scale;
-        const ctx = extractionCanvas.getContext('2d');
+        const ctx = extractionCanvas.getContext("2d");
         ctx.drawImage(
             this._img,
             this._offsetX * scale,
@@ -185,6 +190,46 @@ class App {
             return result.map((x) => Math.round(x));
         };
     }
+}
+
+function extractProjectedImage(solution, src, dstCanvas) {
+    const projector = solution.projector();
+
+    const dst = dstCanvas.getContext("2d");
+    const imgData = dst.createImageData(dstCanvas.width, dstCanvas.height);
+
+    const [w, h] = solution.size.toList();
+    const scaleX = w / dstCanvas.width;
+    const scaleY = h / dstCanvas.height;
+
+    for (let y = 0; y < dstCanvas.height; y++) {
+        for (let x = 0; x < dstCanvas.width; x++) {
+            const dstPoint = new Point2(x * scaleX, y * scaleY);
+            const sourcePoint = projector(dstPoint);
+            const sourcePixel = src(sourcePoint.x, sourcePoint.y);
+            const idx = (x + y * dstCanvas.width) * 4;
+            for (let i = 0; i < 4; i++) {
+                imgData.data[idx + i] = sourcePixel[i];
+            }
+        }
+    }
+
+    dst.putImageData(imgData, 0, 0);
+}
+
+function canvasToTensor(canvas) {
+    const imgData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+    const result = nn.Tensor.zeros(nn.Shape.make(1, 3, canvas.height, canvas.width));
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+            for (let k = 0; k < 3; k++) {
+                const data = imgData.data[(y * canvas.width + x) * 4 + k] / 255;
+                result.data[(k * canvas.height + y) * canvas.width + x] = data;
+            }
+        }
+    }
+    console.log(result);
+    return result;
 }
 
 class Point2 {
