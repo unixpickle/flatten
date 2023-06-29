@@ -5,6 +5,8 @@ Train a model to predict the original aspect ratio of photos given a square resi
 import argparse
 import glob
 import os
+import random
+from typing import Iterator, Tuple
 
 import torch
 from PIL import Image, ImageFile
@@ -26,8 +28,12 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dataset = StretchDataset(args.image_dir)
-    loader = DataLoader(dataset, batch_size=args.batch_size)
+    test_data = iterate_data(
+        StretchDataset(args.image_dir, valid=True), batch_size=args.batch_size
+    )
+    train_data = iterate_data(
+        StretchDataset(args.image_dir), batch_size=args.batch_size
+    )
 
     model = StretchPredictor(device=device)
     print(f"total of {sum(x.numel() for x in model.parameters())} parameters.")
@@ -35,22 +41,38 @@ def main():
 
     i = 0
     while True:
-        for inputs, targets in loader:
-            i += 1
-            loss = model.losses(inputs.to(device), targets.to(device)).mean()
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            print(f"step {i}: loss={loss.item():.05}")
-            if i % args.save_interval == 0:
-                print(f"saving to {args.checkpoint}...")
-                with open(args.checkpoint, "wb") as f:
-                    torch.save(model.state_dict(), f)
+        train_x, train_y = next(train_data)
+        test_x, test_y = next(test_data)
+        i += 1
+        loss = model.losses(train_x.to(device), train_y.to(device)).mean()
+        with torch.no_grad():
+            test_loss = model.losses(test_x.to(device), test_y.to(device)).mean()
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        print(f"step {i}: loss={loss.item():.05} test={test_loss.item():.05}")
+        if i % args.save_interval == 0:
+            print(f"saving to {args.checkpoint}...")
+            with open(args.checkpoint, "wb") as f:
+                torch.save(model.state_dict(), f)
+
+
+def iterate_data(
+    dataset: Dataset, batch_size: int
+) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=2)
+    while True:
+        yield from iter(loader)
 
 
 class StretchDataset(Dataset):
-    def __init__(self, directory: str):
-        self.image_paths = glob.glob(os.path.join(directory, "*.jpg"))
+    def __init__(self, directory: str, valid: bool = False, num_valid: int = 10000):
+        self.image_paths = sorted(glob.glob(os.path.join(directory, "*.jpg")))
+        random.Random(1337).shuffle(self.image_paths)
+        if valid:
+            self.image_paths = self.image_paths[:num_valid]
+        else:
+            self.image_paths = self.image_paths[num_valid:]
         self.resize = Resize((64, 64))
         self.torchify = ToTensor()
 
