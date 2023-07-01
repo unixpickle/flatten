@@ -4,10 +4,12 @@ Train a model to predict the original aspect ratio of photos given a square resi
 
 import argparse
 import glob
+import math
 import os
 import random
 from typing import Iterator, Tuple
 
+import numpy as np
 import torch
 from PIL import Image, ImageFile
 from torch.optim import Adam
@@ -60,9 +62,18 @@ def main():
 def iterate_data(
     dataset: Dataset, batch_size: int
 ) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=2)
+    loader = DataLoader(
+        dataset, batch_size=batch_size, num_workers=2, worker_init_fn=_seed_worker
+    )
     while True:
         yield from iter(loader)
+
+
+def _seed_worker(worker_id: int):
+    seed = worker_id + np.random.randint(2**30)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 class StretchDataset(Dataset):
@@ -80,6 +91,8 @@ class StretchDataset(Dataset):
         ImageFile.LOAD_TRUNCATED_IMAGES = True
 
         image = Image.open(self.image_paths[index]).convert("RGB")
+        image = random_crop(image)
+
         orig_shape = self.torchify(image).shape
         img = self.torchify(self.resize(image))
         size = orig_shape[1] / orig_shape[2]
@@ -87,6 +100,15 @@ class StretchDataset(Dataset):
 
     def __len__(self):
         return len(self.image_paths)
+
+
+def random_crop(image: Image.Image, min_frac: float = 0.9) -> Image.Image:
+    w, h = image.size
+    new_h = np.random.randint(math.ceil(h * min_frac), h + 1)
+    new_w = np.random.randint(math.ceil(w * min_frac), w + 1)
+    new_y = np.random.randint(0, h - new_h + 1)
+    new_x = np.random.randint(0, w - new_w + 1)
+    return image.crop((new_x, new_y, new_x + new_w, new_y + new_h))
 
 
 if __name__ == "__main__":
