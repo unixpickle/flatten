@@ -13,21 +13,20 @@ let diffusionModel = null;
 let stretchModel = null;
 
 onmessage = (event) => {
-    if (event.data["points"]) {
-        const cornerData = event.data.points;
-        solve(cornerData).then((solution) => {
-            postMessage({ solution: solution });
-        }).catch((e) => {
-            postMessage({ error: e });
-        });
-    } else if (event.data["image"]) {
-        const imageData = event.data.image;
-        predictStretch(imageData).then((solution) => {
-            postMessage({ stretch: solution });
-        }).catch((e) => {
-            postMessage({ error: e });
-        });
+    const methods = {
+        "solve": solve,
+        "predictStretch": predictStretch,
     }
+    const msg = event.data;
+    if (!methods.hasOwnProperty(msg.method)) {
+        postMessage({ id: msg.id, error: "no such method: " + msg.method });
+        return;
+    }
+    methods[msg.method].apply(null, msg.args).then((x) => {
+        postMessage({ id: msg.id, data: x });
+    }).catch((e) => {
+        postMessage({ id: msg.id, error: '' + e });
+    });
 }
 
 async function solve(cornerData) {

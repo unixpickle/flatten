@@ -1,21 +1,6 @@
 class App {
     constructor() {
-        this.worker = new Worker("js/worker.js");
-        this.worker.onmessage = (e) => {
-            const msg = e.data;
-            console.log(msg);
-            if (msg["error"]) {
-                alert("Error: " + msg.error);
-            } else {
-                if (msg["solution"]) {
-                    const solVec = nn.Tensor.fromData(msg.solution);
-                    const solution = nn.PerspectiveSolution.fromFlatVec(solVec);
-                    this.handleSolution(solution);
-                } else if (msg["stretch"]) {
-                    this.handleStretch(msg["stretch"][0]);
-                }
-            }
-        };
+        this.modelClient = new ModelClient();
 
         this.dropZone = document.getElementById("drop-zone");
         this.canvas = document.getElementById("picker");
@@ -47,10 +32,6 @@ class App {
 
         // Points for fitting.
         this._points = [];
-
-        // During the solver process.
-        this._solution = null;
-        this._stretch = null;
     }
 
     handleDragOver(evt) {
@@ -115,35 +96,26 @@ class App {
     }
 
     solve() {
-        this.worker.postMessage({
-            points: this._points.map((p) => [p.x, p.y])
+        let solution = null;
+        this.modelClient.solve(this._points).then((s) => {
+            solution = s;
+            const dstCanvas = document.createElement("canvas");
+            dstCanvas.width = 64;
+            dstCanvas.height = 64;
+            extractProjectedImage(solution, this.pixelSource(), dstCanvas);
+            const imageData = canvasToTensor(dstCanvas).toList();
+            return this.modelClient.predictStretch(imageData);
+        }).then((stretch) => {
+            const w = 1;
+            const h = stretch;
+            const scale = Math.min(200 / w, 200 / h);
+
+            const dstCanvas = document.createElement("canvas");
+            dstCanvas.width = Math.ceil(w * scale);
+            dstCanvas.height = Math.ceil(h * scale);
+            extractProjectedImage(solution, this.pixelSource(), dstCanvas);
+            document.body.appendChild(dstCanvas);
         });
-    }
-
-    handleSolution(solution) {
-        this._solution = solution;
-        const dstCanvas = document.createElement("canvas");
-        dstCanvas.width = 64;
-        dstCanvas.height = 64;
-        extractProjectedImage(solution, this.pixelSource(), dstCanvas);
-        const imageData = canvasToTensor(dstCanvas).toList();
-        this.worker.postMessage({ image: imageData });
-        document.body.appendChild(dstCanvas);
-    }
-
-    handleStretch(stretch) {
-        console.log("got stretch:", stretch);
-        this._stretch = stretch;
-
-        const w = 1;
-        const h = stretch;
-        const scale = Math.min(200 / w, 200 / h);
-
-        const dstCanvas = document.createElement("canvas");
-        dstCanvas.width = Math.ceil(w * scale);
-        dstCanvas.height = Math.ceil(h * scale);
-        extractProjectedImage(this._solution, this.pixelSource(), dstCanvas);
-        document.body.appendChild(dstCanvas);
     }
 
     pixelSource() {
