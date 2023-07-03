@@ -1,13 +1,3 @@
-#drop-zone {
-    border: 2px dashed #bbb;
-    width: 500px;
-    height: 500px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0 auto;
-}
-
 #picker {
     display: none;
     display: flex;

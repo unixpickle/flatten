@@ -1,37 +1,32 @@
+const HONING_AREA_SIZE = 0.05;
+
 class App {
     constructor() {
         this.modelClient = new ModelClient();
 
-        this.dropZone = document.getElementById("drop-zone");
-        this.canvas = document.getElementById("picker");
-
-        this.dropZone.addEventListener("dragover", (e) => this.handleDragOver(e), false);
-        this.dropZone.addEventListener("drop", (e) => this.handleFileSelect(e), false);
-
-        this.canvas.addEventListener("mousedown", (e) => {
-            if (this._points.length === 4) {
-                this._points = [];
-            }
-            const x = e.offsetX;
-            const y = e.offsetY;
-            this._points.push(new Point2(
-                x / this.canvas.width,
-                y / this.canvas.height,
-            ));
-            this.draw();
-            if (this._points.length === 4) {
-                this.solve();
-            }
-        });
-
-        // Properties for rendering the image.
+        // State set once an image is picked
         this._img = null;
         this._scale = null;
         this._offsetX = 0;
         this._offsetY = 0;
 
-        // Points for fitting.
+        // State updated every time a point is picked.
         this._points = [];
+
+        // Set when picking a point before honing.
+        this._hoveringHoningPoint = null;
+
+        // Set when honing a point after clicking a rough area.
+        this._honingPoint = null;
+
+        // Set to true when loading a solution.
+        this._isLoading = false;
+
+        this.canvas = document.getElementById("picker");
+        this.canvas.addEventListener("dragover", (e) => this.handleDragOver(e), false);
+        this.canvas.addEventListener("drop", (e) => this.handleFileSelect(e), false);
+        this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     }
 
     handleDragOver(evt) {
@@ -66,36 +61,122 @@ class App {
                     this.draw();
                 };
                 img.src = e.target.result;
-
-                this.dropZone.style.display = "none";
-                this.canvas.style.display = "block";
             };
 
             reader.readAsDataURL(f);
         }
     }
 
+    _mouseEventPoint(e) {
+        const x = e.offsetX;
+        const y = e.offsetY;
+        return new Point2(
+            x / this.canvas.width,
+            y / this.canvas.height,
+        );
+    }
+
+    handleMouseDown(e) {
+        this.handleClick(this._mouseEventPoint(e));
+    }
+
+    handleMouseMove(e) {
+        this.handleHover(this._mouseEventPoint(e));
+    }
+
+    handleClick(point) {
+        if (this._isLoading) {
+            return;
+        }
+
+        if (!this._img) {
+            // TODO: Manually bring up file picker here.
+        } else if (this._honingPoint) {
+            this._points.push(new Point2(
+                this._honingPoint.x + HONING_AREA_SIZE * point.x,
+                this._honingPoint.y + HONING_AREA_SIZE * point.y,
+            ));
+            this._honingPoint = null;
+            if (this._points.length === 4) {
+                this.solve();
+            }
+            this.draw();
+        } else {
+            this._hoveringHoningPoint = null;
+            this._honingPoint = this.honingPointForCursor(point);
+            this.draw();
+        }
+    }
+
+    handleHover(point) {
+        if (this._isLoading) {
+            return;
+        }
+
+        if (this._img && !this._honingPoint) {
+            this._hoveringHoningPoint = this.honingPointForCursor(point);
+            this.draw();
+        }
+    }
+
+    honingPointForCursor(point) {
+        // TODO: clip to image bounds.
+        return new Point2(point.x - HONING_AREA_SIZE / 2, point.y - HONING_AREA_SIZE / 2);
+    }
+
     draw() {
         const ctx = this.canvas.getContext("2d");
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.drawImage(
-            this._img,
-            this._offsetX,
-            this._offsetY,
-            this._scale * this._img.width,
-            this._scale * this._img.height,
-        );
-        this._points.forEach((p) => {
-            const x = this.canvas.width * p.x;
-            const y = this.canvas.height * p.y;
-            ctx.fillStyle = "green";
-            ctx.beginPath();
-            ctx.arc(x, y, 5.0, 0, Math.PI * 2, false);
-            ctx.fill();
-        });
+        if (!this._img) {
+            // TODO: draw prompt to drop files.
+        } else if (!this._honingPoint) {
+            ctx.drawImage(
+                this._img,
+                this._offsetX,
+                this._offsetY,
+                this._scale * this._img.width,
+                this._scale * this._img.height,
+            );
+            if (this._hoveringHoningPoint) {
+                ctx.strokeStyle = "green";
+                ctx.beginPath();
+                ctx.rect(
+                    this._hoveringHoningPoint.x * this.canvas.width,
+                    this._hoveringHoningPoint.y * this.canvas.width,
+                    HONING_AREA_SIZE * this.canvas.width,
+                    HONING_AREA_SIZE * this.canvas.height,
+                );
+                ctx.stroke();
+            }
+            this._points.forEach((p) => {
+                const x = this.canvas.width * p.x;
+                const y = this.canvas.height * p.y;
+                ctx.fillStyle = "green";
+                ctx.beginPath();
+                ctx.arc(x, y, 5.0, 0, Math.PI * 2, false);
+                ctx.fill();
+            });
+        } else {
+            ctx.save();
+            ctx.scale(1 / HONING_AREA_SIZE, 1 / HONING_AREA_SIZE);
+            ctx.translate(this._offsetX, this._offsetY);
+            ctx.translate(
+                -this._honingPoint.x * this.canvas.width,
+                -this._honingPoint.y * this.canvas.height,
+            );
+            ctx.drawImage(
+                this._img,
+                0,
+                0,
+                this._scale * this._img.width,
+                this._scale * this._img.height,
+            )
+            ctx.restore();
+        }
     }
 
     solve() {
+        this._isLoading = true;
         let solution = null;
         this.modelClient.solve(this._points).then((s) => {
             solution = s;
