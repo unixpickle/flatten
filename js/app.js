@@ -24,47 +24,46 @@ class App {
 
         this.canvas = document.getElementById("picker");
         this.canvas.addEventListener("dragover", (e) => this.handleDragOver(e), false);
-        this.canvas.addEventListener("drop", (e) => this.handleFileSelect(e), false);
+        this.canvas.addEventListener("dragleave", (e) => this.canvas.classList.remove("dragging"));
+        this.canvas.addEventListener("drop", (e) => this.handleDrop(e), false);
         this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
         this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     }
 
-    handleDragOver(evt) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        evt.dataTransfer.dropEffect = "copy";
+    handleDragOver(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        this.canvas.classList.add("dragging-file");
     }
 
-    handleFileSelect(evt) {
-        evt.stopPropagation();
-        evt.preventDefault();
+    handleDrop(e) {
+        this.canvas.classList.remove("dragging")
+        e.stopPropagation();
+        e.preventDefault();
+        const files = e.dataTransfer.files;
+        this.handleFile(files[0]);
+        this.canvas.classList.add("dragging");
+    }
 
-        var files = evt.dataTransfer.files;
-        for (let i = 0, f; f = files[i]; i++) {
-            if (!f.type.match("image.*")) {
-                continue;
-            }
-
-            var reader = new FileReader();
-
-            reader.onload = (e) => {
-                var img = new Image();
-                img.onload = () => {
-                    const iw = img.width;
-                    const ih = img.height;
-                    const cw = this.canvas.width;
-                    const ch = this.canvas.height;
-                    this._scale = Math.min(cw / iw, ch / ih);
-                    this._offsetX = Math.round(cw - (this._scale * iw));
-                    this._offsetY = Math.round(ch - (this._scale * ih));
-                    this._img = img;
-                    this.draw();
-                };
-                img.src = e.target.result;
-            };
-
-            reader.readAsDataURL(f);
+    handleFile(f) {
+        if (this._isLoading || !f.type.startsWith("image/")) {
+            return;
         }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            var img = new Image();
+            img.onload = () => this.resetImage(img);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(f);
+    }
+
+    promptFileUpload() {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.onchange = (e) => this.handleFile(e.target.files[0]);
+        input.click();
     }
 
     _mouseEventPoint(e) {
@@ -90,7 +89,7 @@ class App {
         }
 
         if (!this._img) {
-            // TODO: Manually bring up file picker here.
+            this.promptFileUpload();
         } else if (this._honingPoint) {
             this._points.push(new Point2(
                 this._honingPoint.x + HONING_AREA_SIZE * point.x,
@@ -122,6 +121,21 @@ class App {
     honingPointForCursor(point) {
         // TODO: clip to image bounds.
         return new Point2(point.x - HONING_AREA_SIZE / 2, point.y - HONING_AREA_SIZE / 2);
+    }
+
+    resetImage(img) {
+        const iw = img.width;
+        const ih = img.height;
+        const cw = this.canvas.width;
+        const ch = this.canvas.height;
+        this._scale = Math.min(cw / iw, ch / ih);
+        this._offsetX = Math.round(cw - (this._scale * iw));
+        this._offsetY = Math.round(ch - (this._scale * ih));
+        this._img = img;
+        this._honingPoint = null;
+        this._hoveringHoningPoint = null;
+        this._points = [];
+        this.draw();
     }
 
     draw() {
@@ -170,7 +184,7 @@ class App {
                 0,
                 this._scale * this._img.width,
                 this._scale * this._img.height,
-            )
+            );
             ctx.restore();
         }
     }
