@@ -1,0 +1,22 @@
+#picker {
+    display: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}
+
+#finish-dialog {
+    position: absolute;
+    top: 0px;
+    left: calc(50% - 250px);
+    width: 500px;
+}
+
+.scaling-preview {
+    position: relative;
+    margin-left: 10px;
+    width: 480px;
+    height: 480px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
