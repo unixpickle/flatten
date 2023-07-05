@@ -28,6 +28,8 @@ class App {
         this.canvas.addEventListener("drop", (e) => this.handleDrop(e), false);
         this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
         this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
+
+        this.draw();
     }
 
     handleDragOver(e) {
@@ -141,8 +143,10 @@ class App {
     draw() {
         const ctx = this.canvas.getContext("2d");
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        if (!this._img) {
-            // TODO: draw prompt to drop files.
+        if (this._isLoading) {
+            this.drawText("Loading...");
+        } else if (!this._img) {
+            this.drawText("Drop files or click here");
         } else if (!this._honingPoint) {
             ctx.drawImage(
                 this._img,
@@ -189,27 +193,43 @@ class App {
         }
     }
 
+    drawText(text) {
+        const ctx = this.canvas.getContext("2d");
+        ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+        ctx.beginPath();
+        ctx.rect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fill();
+
+        ctx.fillStyle = "#777";
+        ctx.font = "30px sans-serif";
+
+        ctx.beginPath();
+        ctx.textAlign = "center";
+        ctx.fillText(text, this.canvas.width / 2, this.canvas.height / 2);
+    }
+
     solve() {
         this._isLoading = true;
+        const pixelSource = this.pixelSource();
+
         let solution = null;
         this.modelClient.solve(this._points).then((s) => {
             solution = s;
             const dstCanvas = document.createElement("canvas");
             dstCanvas.width = 64;
             dstCanvas.height = 64;
-            extractProjectedImage(solution, this.pixelSource(), dstCanvas);
+            extractProjectedImage(solution, pixelSource, dstCanvas);
             const imageData = canvasToTensor(dstCanvas).toList();
             return this.modelClient.predictStretch(imageData);
         }).then((stretch) => {
-            const w = 1;
-            const h = stretch;
-            const scale = Math.min(200 / w, 200 / h);
-
-            const dstCanvas = document.createElement("canvas");
-            dstCanvas.width = Math.ceil(w * scale);
-            dstCanvas.height = Math.ceil(h * scale);
-            extractProjectedImage(solution, this.pixelSource(), dstCanvas);
-            document.body.appendChild(dstCanvas);
+            const finishDialog = new FinishDialog(
+                solution,
+                pixelSource,
+                stretch,
+                Math.max(this._img.width, this._img.height),
+            );
+            this.canvas.style.display = 'none';
+            finishDialog.show();
         });
     }
 
@@ -256,6 +276,63 @@ class App {
 
             return result.map((x) => Math.round(x));
         };
+    }
+}
+
+class FinishDialog {
+    constructor(solution, pixelSource, aspectRatio, defaultSize) {
+        this.solution = solution;
+        this.pixelSource = pixelSource;
+
+        this.element = document.getElementById('finish-dialog');
+        this.previewContainer = this.element.getElementsByClassName('scaling-preview')[0];
+        this.previewContainer.innerHTML = '';
+        this.sideLength = this.element.getElementsByClassName('side-length')[0];
+        this.aspectRatio = this.element.getElementsByClassName('aspect-ratio')[0];
+
+        this.aspectRatio.value = Math.log(aspectRatio);
+        this.sideLength.value = defaultSize;
+
+        this.previewCanvas = this.createCanvas(1, 256);
+        this.previewCanvas.style.position = 'absolute';
+        this.updateAspectRatio();
+        this.previewContainer.appendChild(this.previewCanvas);
+
+        this.aspectRatio.addEventListener('input', () => this.updateAspectRatio());
+    }
+
+    createCanvas(aspectRatio, sideLength) {
+        aspectRatio = aspectRatio || Math.exp(parseFloat(this.aspectRatio.value));
+        sideLength = sideLength || parseInt(this.sideLength.value);
+
+        const w = 1;
+        const h = aspectRatio;
+        const scale = Math.min(sideLength / w, sideLength / h);
+
+        const dstCanvas = document.createElement("canvas");
+        dstCanvas.width = w * scale;
+        dstCanvas.height = h * scale;
+        extractProjectedImage(this.solution, this.pixelSource, dstCanvas);
+        return dstCanvas;
+    }
+
+    updateAspectRatio() {
+        const ratio = Math.exp(parseFloat(this.aspectRatio.value));
+        if (ratio > 1) {
+            this.previewCanvas.style.width = (100 / ratio).toFixed(2) + '%';
+            this.previewCanvas.style.left = (50 - 50 / ratio).toFixed(2) + '%';
+            this.previewCanvas.style.height = '100%';
+            this.previewCanvas.style.top = '0';
+        } else {
+            this.previewCanvas.style.height = (100 * ratio).toFixed(2) + '%';
+            this.previewCanvas.style.top = (50 - 50 * ratio).toFixed(2) + '%';
+            this.previewCanvas.style.width = '100%';
+            this.previewCanvas.style.left = '0';
+        }
+    }
+
+    show() {
+        this.element.style.display = 'block';
     }
 }
 
