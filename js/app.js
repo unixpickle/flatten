@@ -26,7 +26,13 @@ class App {
         this.canvas.addEventListener("dragover", (e) => this.handleDragOver(e), false);
         this.canvas.addEventListener("dragleave", (e) => this.canvas.classList.remove("dragging"));
         this.canvas.addEventListener("drop", (e) => this.handleDrop(e), false);
-        this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener("click", (e) => {
+            if (e.detail > 1) {
+                // Prevent double clicks.
+                return;
+            }
+            this.handleMouseDown(e);
+        });
         this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
 
         this.draw();
@@ -121,8 +127,14 @@ class App {
     }
 
     honingPointForCursor(point) {
-        // TODO: clip to image bounds.
-        return new Point2(point.x - HONING_AREA_SIZE / 2, point.y - HONING_AREA_SIZE / 2);
+        const minX = this._offsetX / this.canvas.width;
+        const minY = this._offsetY / this.canvas.width;
+        const maxX = minX + this._img.width * this._scale / this.canvas.width - HONING_AREA_SIZE;
+        const maxY = minY + this._img.height * this._scale / this.canvas.height - HONING_AREA_SIZE;
+        return new Point2(
+            Math.min(maxX, Math.max(minX, point.x - HONING_AREA_SIZE / 2)),
+            Math.min(maxY, Math.max(minY, point.y - HONING_AREA_SIZE / 2)),
+        );
     }
 
     resetImage(img) {
@@ -131,8 +143,8 @@ class App {
         const cw = this.canvas.width;
         const ch = this.canvas.height;
         this._scale = Math.min(cw / iw, ch / ih);
-        this._offsetX = Math.round(cw - (this._scale * iw));
-        this._offsetY = Math.round(ch - (this._scale * ih));
+        this._offsetX = Math.round((cw - (this._scale * iw)) / 2);
+        this._offsetY = Math.round((ch - (this._scale * ih)) / 2);
         this._img = img;
         this._honingPoint = null;
         this._hoveringHoningPoint = null;
