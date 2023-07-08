@@ -228,7 +228,7 @@ class App {
                 stretch,
                 Math.max(this._img.width, this._img.height),
             );
-            this.canvas.style.display = 'none';
+            this.canvas.style.display = "none";
             finishDialog.show();
         });
     }
@@ -284,21 +284,21 @@ class FinishDialog {
         this.solution = solution;
         this.pixelSource = pixelSource;
 
-        this.element = document.getElementById('finish-dialog');
-        this.previewContainer = this.element.getElementsByClassName('scaling-preview')[0];
-        this.previewContainer.innerHTML = '';
-        this.sideLength = this.element.getElementsByClassName('side-length')[0];
-        this.aspectRatio = this.element.getElementsByClassName('aspect-ratio')[0];
+        this.element = document.getElementById("finish-dialog");
+        this.previewContainer = this.element.getElementsByClassName("scaling-preview")[0];
+        this.previewContainer.innerHTML = "";
+        this.sideLength = this.element.getElementsByClassName("side-length")[0];
+        this.aspectRatio = this.element.getElementsByClassName("aspect-ratio")[0];
 
         this.aspectRatio.value = Math.log(aspectRatio);
         this.sideLength.value = defaultSize;
 
         this.previewCanvas = this.createCanvas(1, 256);
-        this.previewCanvas.style.position = 'absolute';
+        this.previewCanvas.style.position = "absolute";
         this.updateAspectRatio();
         this.previewContainer.appendChild(this.previewCanvas);
 
-        this.aspectRatio.addEventListener('input', () => this.updateAspectRatio());
+        this.aspectRatio.addEventListener("input", () => this.updateAspectRatio());
     }
 
     createCanvas(aspectRatio, sideLength) {
@@ -319,20 +319,20 @@ class FinishDialog {
     updateAspectRatio() {
         const ratio = Math.exp(parseFloat(this.aspectRatio.value));
         if (ratio > 1) {
-            this.previewCanvas.style.width = (100 / ratio).toFixed(2) + '%';
-            this.previewCanvas.style.left = (50 - 50 / ratio).toFixed(2) + '%';
-            this.previewCanvas.style.height = '100%';
-            this.previewCanvas.style.top = '0';
+            this.previewCanvas.style.width = (100 / ratio).toFixed(2) + "%";
+            this.previewCanvas.style.left = (50 - 50 / ratio).toFixed(2) + "%";
+            this.previewCanvas.style.height = "100%";
+            this.previewCanvas.style.top = "0";
         } else {
-            this.previewCanvas.style.height = (100 * ratio).toFixed(2) + '%';
-            this.previewCanvas.style.top = (50 - 50 * ratio).toFixed(2) + '%';
-            this.previewCanvas.style.width = '100%';
-            this.previewCanvas.style.left = '0';
+            this.previewCanvas.style.height = (100 * ratio).toFixed(2) + "%";
+            this.previewCanvas.style.top = (50 - 50 * ratio).toFixed(2) + "%";
+            this.previewCanvas.style.width = "100%";
+            this.previewCanvas.style.left = "0";
         }
     }
 
     show() {
-        this.element.style.display = 'block';
+        this.element.style.display = "block";
     }
 }
 
