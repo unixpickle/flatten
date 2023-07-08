@@ -137,6 +137,7 @@ class App {
         this._honingPoint = null;
         this._hoveringHoningPoint = null;
         this._points = [];
+        this._isLoading = false;
         this.draw();
     }
 
@@ -229,6 +230,11 @@ class App {
                 Math.max(this._img.width, this._img.height),
             );
             this.canvas.style.display = "none";
+            finishDialog.onClose = () => {
+                finishDialog.hide();
+                this.canvas.style.display = "block";
+                this.resetImage(this._img);
+            };
             finishDialog.show();
         });
     }
@@ -289,6 +295,14 @@ class FinishDialog {
         this.previewContainer.innerHTML = "";
         this.sideLength = this.element.getElementsByClassName("side-length")[0];
         this.aspectRatio = this.element.getElementsByClassName("aspect-ratio")[0];
+        this.downloadButton = this.element.getElementsByClassName("download-button")[0];
+        this.closeButton = this.element.getElementsByClassName("close-button")[0];
+
+        this.onClose = () => null;
+        this.closeButton.addEventListener("click", () => this.onClose());
+        this.downloadButton.addEventListener("click", () => {
+            this.downloadButton.href = this.downloadURL();
+        }, false);
 
         this.aspectRatio.value = Math.log(aspectRatio);
         this.sideLength.value = defaultSize;
@@ -331,8 +345,24 @@ class FinishDialog {
         }
     }
 
+    downloadURL() {
+        const canvas = this.createCanvas();
+        // https://stackoverflow.com/questions/12796513/html5-canvas-to-png-file
+        let dt = canvas.toDataURL("image/png");
+        dt = dt.replace(/^data:image\/[^;]*/, "data:application/octet-stream");
+        dt = dt.replace(
+            /^data:application\/octet-stream/,
+            "data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=flattened.png",
+        );
+        return dt;
+    }
+
     show() {
         this.element.style.display = "block";
+    }
+
+    hide() {
+        this.element.style.display = "none";
     }
 }
 
