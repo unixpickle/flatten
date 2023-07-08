@@ -1,3 +1,8 @@
+html,
+body {
+    font-family: sans-serif;
+}
+
 #picker {
     display: none;
     display: flex;
@@ -11,6 +16,7 @@
     top: 0px;
     left: calc(50% - 250px);
     width: 500px;
+    text-align: center;
 }
 
 .scaling-preview {
@@ -19,4 +25,30 @@
     width: 480px;
     height: 480px;
     background-color: rgba(0, 0, 0, 0.1);
+}
+
+.setting-field,
+.buttons-field {
+    margin: 5px 0;
+}
+
+.download-button,
+.close-button {
+    display: inline-block;
+    text-decoration: none;
+    color: white;
+    padding: 7px;
+    margin: 0 3px;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+    outline: inherit;
+}
+
+.download-button {
+    background-color: #65bcd4;
+}
+
+.close-button {
+    background-color: #d46565;
 }
