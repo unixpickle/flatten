@@ -75,8 +75,9 @@ class App {
     }
 
     _mouseEventPoint(e) {
-        const x = e.offsetX;
-        const y = e.offsetY;
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.offsetX / (rect.width / this.canvas.width);
+        const y = e.offsetY / (rect.height / this.canvas.height);
         return new Point2(
             x / this.canvas.width,
             y / this.canvas.height,
@@ -241,10 +242,10 @@ class App {
                 stretch,
                 Math.max(this._img.width, this._img.height),
             );
-            this.canvas.style.display = "none";
+            this.canvas.parentElement.classList.add("hidden");
             finishDialog.onClose = () => {
                 finishDialog.hide();
-                this.canvas.style.display = "block";
+                this.canvas.parentElement.classList.remove("hidden");
                 this.resetImage(this._img);
             };
             finishDialog.show();
