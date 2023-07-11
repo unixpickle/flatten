@@ -50,8 +50,8 @@ def main():
             clip_denoised=False,
             model_kwargs=dict(cond=targets.view(1, -1).repeat(args.batch_size, 1)),
         )
-        origin, size, rotation, translation = [
-            nn.Parameter(x) for x in torch.split(sample, [3, 2, 3, 3], dim=-1)
+        origin, size, rotation, translation, post_translation = [
+            nn.Parameter(x) for x in torch.split(sample, [3, 2, 3, 3, 2], dim=-1)
         ]
 
     origin = nn.Parameter(origin[:, :2].detach())

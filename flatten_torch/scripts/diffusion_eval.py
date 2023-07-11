@@ -35,8 +35,14 @@ def main():
         clip_denoised=False,
         model_kwargs=dict(cond=batch.proj_corners.flatten(1)),
     )
-    origin, size, rotation, translation = torch.split(sample, [3, 2, 3, 3], dim=-1)
-    camera = Camera(rotation=euler_rotation(rotation), translation=translation)
+    origin, size, rotation, translation, post_translation = torch.split(
+        sample, [3, 2, 3, 3, 2], dim=-1
+    )
+    camera = Camera(
+        rotation=euler_rotation(rotation),
+        translation=translation,
+        post_translation=post_translation,
+    )
     corners = corners_on_zplane(origin, size)
     proj = camera.project(corners)
     reproj_err = (proj.projected - batch.proj_corners).pow(2).mean()

@@ -42,8 +42,10 @@ def main():
         model_kwargs=dict(cond=input),
     )
 
-    origin, size, rotation, translation = torch.split(sample, [3, 2, 3, 3], dim=-1)
-    print(f"{origin=} {size=} {rotation=} {translation=}")
+    origin, size, rotation, translation, post_translation = torch.split(
+        sample, [3, 2, 3, 3, 2], dim=-1
+    )
+    print(f"{origin=} {size=} {rotation=} {translation=} {post_translation=}")
 
 
 if __name__ == "__main__":

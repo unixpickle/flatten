@@ -39,7 +39,14 @@ def main():
         batch = Batch.sample_batch(BATCH_SIZE, generator=gen, device=device)
         model_kwargs = dict(cond=batch.proj_corners.flatten(1))
         target = torch.cat(
-            [batch.origin, batch.size, batch.rotation, batch.translation], dim=-1
+            [
+                batch.origin,
+                batch.size,
+                batch.rotation,
+                batch.translation,
+                batch.post_translation,
+            ],
+            dim=-1,
         )
         losses = diffusion.training_losses(
             model=model,

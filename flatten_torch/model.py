@@ -9,7 +9,7 @@ class DiffusionPredictor(nn.Module):
         self,
         device: torch.device,
         d_cond: int = 8,
-        d_input: int = 11,
+        d_input: int = 13,
         d_model: int = 512,
     ):
         super().__init__()
