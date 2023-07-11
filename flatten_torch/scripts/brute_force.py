@@ -30,6 +30,7 @@ def main():
         size = nn.Parameter(batch.size)
         rotation = nn.Parameter(batch.rotation)
         translation = nn.Parameter(batch.translation)
+        post_translation = nn.Parameter(batch.post_translation)
     else:
         model = DiffusionPredictor(device=device)
         diffusion = diffusion_from_config(
@@ -55,13 +56,17 @@ def main():
 
     origin = nn.Parameter(origin[:, :2].detach())
 
-    opt = Adam([origin, size, rotation, translation], lr=args.lr)
+    opt = Adam([origin, size, rotation, translation, post_translation], lr=args.lr)
 
     for i in range(args.iters):
         corners = corners_on_zplane(
             torch.cat([origin, torch.zeros_like(origin[:, :1])], dim=-1), size
         )
-        camera = Camera(rotation=euler_rotation(rotation), translation=translation)
+        camera = Camera(
+            rotation=euler_rotation(rotation),
+            translation=translation,
+            post_translation=post_translation,
+        )
         proj = camera.project(corners).projected
         losses = (proj - targets).pow(2).flatten(1).sum(-1)
         loss = losses.sum()
@@ -77,6 +82,7 @@ def main():
         f" size={size[best_idx].tolist()}"
         f" rotation={rotation[best_idx].tolist()}"
         f" translation={translation[best_idx].tolist()}"
+        f" post_translation={post_translation[best_idx].tolist()}"
     )
 
 

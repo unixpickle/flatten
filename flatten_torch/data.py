@@ -13,6 +13,7 @@ class Batch:
     size: torch.Tensor  # [N x 2] batch of width+height
     rotation: torch.Tensor  # [N x 3] batch of Euler angles
     translation: torch.Tensor  # [N x 3] batch of translations
+    post_translation: torch.Tensor  # [N x 2] batch of 2D translations
     proj_corners: torch.Tensor  # [N x 4 x 2] batch of projected corners
 
     def cat(self, other: "Batch") -> "Batch":
@@ -91,8 +92,18 @@ class Batch:
         translation[..., :2] -= 5
         translation[..., 2] = -(z_near + translation[..., 2] * 10)
 
+        post_translation = torch.rand(
+            size=(max_batch, 2), generator=generator, device=device
+        )
+        post_translation *= 2
+        post_translation -= 1
+
         corners = corners_on_zplane(origin, size)
-        camera = Camera(rotation=euler_rotation(euler_angles), translation=translation)
+        camera = Camera(
+            rotation=euler_rotation(euler_angles),
+            translation=translation,
+            post_translation=post_translation,
+        )
         proj = camera.project(corners)
         areas = areas_of_corners(proj.projected)
         area_thresh = torch.randn(
@@ -112,6 +123,7 @@ class Batch:
             size=size[valid],
             rotation=euler_angles[valid],
             translation=translation[valid],
+            post_translation=post_translation[valid],
             proj_corners=proj.projected[valid],
         )
 

@@ -13,6 +13,7 @@ class Projection:
 class Camera:
     rotation: torch.Tensor  # [N x 3 x 3] rotation matrix
     translation: torch.Tensor  # [N x 3] offset vector
+    post_translation: torch.Tensor  # [N x 2]
 
     def project(self, coords: torch.Tensor) -> Projection:
         """
@@ -23,7 +24,7 @@ class Camera:
         p = torch.einsum("bjk,bnk->bnj", self.rotation, coords)
         p = self.translation[:, None] + p
         z = p[..., 2:]
-        return Projection(p[..., :2] / -z, z)
+        return Projection(self.post_translation[:, None] + p[..., :2] / -z, z)
 
 
 def euler_rotation(xyz: torch.Tensor) -> torch.Tensor:
