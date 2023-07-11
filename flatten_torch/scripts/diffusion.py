@@ -6,7 +6,7 @@ import torch.optim as optim
 
 from flatten_torch.data import Batch
 from flatten_torch.gaussian_diffusion import diffusion_from_config
-from flatten_torch.model import DiffusionPredictor
+from flatten_torch.model import DiffusionPrediction, DiffusionPredictor
 
 BATCH_SIZE = 50000
 SAVE_INTERVAL = 5000
@@ -38,16 +38,7 @@ def main():
     while True:
         batch = Batch.sample_batch(BATCH_SIZE, generator=gen, device=device)
         model_kwargs = dict(cond=batch.proj_corners.flatten(1))
-        target = torch.cat(
-            [
-                batch.origin,
-                batch.size,
-                batch.rotation,
-                batch.translation,
-                batch.post_translation,
-            ],
-            dim=-1,
-        )
+        target = DiffusionPrediction.from_batch(batch).to_vec()
         losses = diffusion.training_losses(
             model=model,
             x_start=target,

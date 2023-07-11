@@ -1,7 +1,10 @@
 import math
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
+
+from flatten_torch.data import Batch
 
 
 class DiffusionPredictor(nn.Module):
@@ -53,6 +56,56 @@ class DiffusionPredictor(nn.Module):
         input_emb = self.input_embed(x)
         cond_emb = self.cond_embed(cond)
         return self.backbone((time_emb + input_emb + cond_emb) / math.sqrt(3))
+
+
+@dataclass
+class DiffusionPrediction:
+    origin: torch.Tensor  # [N x 3]
+    size: torch.Tensor  # [N x 2]
+    rotation: torch.Tensor  # [N x 3]
+    translation: torch.Tensor  # [N x 3]
+    post_translation: torch.Tensor  # [N x 2]
+
+    def __repr__(self) -> str:
+        return (
+            f"DiffusionPrediction({self.origin=} {self.size=} {self.rotation=}"
+            f" {self.translation=} {self.post_translation=})"
+        )
+
+    @classmethod
+    def from_vec(cls, vec: torch.Tensor) -> "DiffusionPrediction":
+        origin, size, rotation, translation, post_translation = torch.split(
+            vec, [3, 2, 3, 3, 2], dim=-1
+        )
+        return cls(
+            origin=origin,
+            size=size,
+            rotation=rotation,
+            translation=translation,
+            post_translation=post_translation,
+        )
+
+    @classmethod
+    def from_batch(cls, batch: Batch) -> "DiffusionPrediction":
+        return cls(
+            origin=batch.origin,
+            size=batch.size,
+            rotation=batch.rotation,
+            translation=batch.translation,
+            post_translation=batch.post_translation,
+        )
+
+    def to_vec(self) -> torch.Tensor:
+        return torch.cat(
+            [
+                self.origin,
+                self.size,
+                self.rotation,
+                self.translation,
+                self.post_translation,
+            ],
+            dim=-1,
+        )
 
 
 def timestep_embedding(timesteps, dim, max_period=10000):

@@ -1,7 +1,7 @@
 import torch
 
 from flatten_torch.gaussian_diffusion import diffusion_from_config
-from flatten_torch.model import DiffusionPredictor
+from flatten_torch.model import DiffusionPrediction, DiffusionPredictor
 
 LOAD_PATH = "diffusion_model.pt"
 
@@ -41,11 +41,7 @@ def main():
         clip_denoised=False,
         model_kwargs=dict(cond=input),
     )
-
-    origin, size, rotation, translation, post_translation = torch.split(
-        sample, [3, 2, 3, 3, 2], dim=-1
-    )
-    print(f"{origin=} {size=} {rotation=} {translation=} {post_translation=}")
+    print(DiffusionPrediction.from_vec(sample))
 
 
 if __name__ == "__main__":

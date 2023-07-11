@@ -7,7 +7,7 @@ import torch.optim as optim
 from flatten_torch.camera import Camera, euler_rotation
 from flatten_torch.data import Batch, corners_on_zplane
 from flatten_torch.gaussian_diffusion import diffusion_from_config
-from flatten_torch.model import DiffusionPredictor
+from flatten_torch.model import DiffusionPrediction, DiffusionPredictor
 
 LOAD_PATH = "diffusion_model.pt"
 BATCH_SIZE = 32
@@ -35,15 +35,13 @@ def main():
         clip_denoised=False,
         model_kwargs=dict(cond=batch.proj_corners.flatten(1)),
     )
-    origin, size, rotation, translation, post_translation = torch.split(
-        sample, [3, 2, 3, 3, 2], dim=-1
-    )
+    pred = DiffusionPrediction.from_vec(sample)
     camera = Camera(
-        rotation=euler_rotation(rotation),
-        translation=translation,
-        post_translation=post_translation,
+        rotation=euler_rotation(pred.rotation),
+        translation=pred.translation,
+        post_translation=pred.post_translation,
     )
-    corners = corners_on_zplane(origin, size)
+    corners = corners_on_zplane(pred.origin, pred.size)
     proj = camera.project(corners)
     reproj_err = (proj.projected - batch.proj_corners).pow(2).mean()
     print(f"mse={reproj_err.item()}")

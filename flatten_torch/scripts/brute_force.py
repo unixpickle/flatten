@@ -7,7 +7,7 @@ from torch.optim import Adam
 from flatten_torch.camera import Camera, euler_rotation
 from flatten_torch.data import Batch, corners_on_zplane
 from flatten_torch.gaussian_diffusion import diffusion_from_config
-from flatten_torch.model import DiffusionPredictor
+from flatten_torch.model import DiffusionPrediction, DiffusionPredictor
 
 
 def main():
@@ -50,9 +50,14 @@ def main():
             clip_denoised=False,
             model_kwargs=dict(cond=targets.view(1, -1).repeat(args.batch_size, 1)),
         )
-        origin, size, rotation, translation, post_translation = [
-            nn.Parameter(x) for x in torch.split(sample, [3, 2, 3, 3, 2], dim=-1)
-        ]
+        pred = DiffusionPrediction.from_vec(sample)
+        origin, size, rotation, translation, post_translation = (
+            pred.origin,
+            pred.size,
+            pred.rotation,
+            pred.translation,
+            pred.post_translation,
+        )
 
     origin = nn.Parameter(origin[:, :2].detach())
 
