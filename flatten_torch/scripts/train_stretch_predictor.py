@@ -11,10 +11,11 @@ from typing import Iterator, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 from PIL import Image, ImageFile
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import Resize, ToTensor
+from torchvision.transforms import ColorJitter, GaussianBlur, Resize, ToTensor
 
 from flatten_torch.model import StretchPredictor
 
@@ -86,6 +87,14 @@ class StretchDataset(Dataset):
             self.image_paths = self.image_paths[num_valid:]
         self.resize = Resize((64, 64))
         self.torchify = ToTensor()
+        self.augment = (
+            nn.Identity()
+            if valid
+            else nn.Sequential(
+                GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 1.0)),
+                ColorJitter(brightness=0.2, hue=0.2),
+            )
+        )
 
     def __getitem__(self, index: int):
         ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -94,7 +103,7 @@ class StretchDataset(Dataset):
         image = random_crop(image)
 
         orig_shape = self.torchify(image).shape
-        img = self.torchify(self.resize(image))
+        img = self.augment(self.torchify(self.resize(image)))
         size = orig_shape[1] / orig_shape[2]
         return img, torch.tensor(size, dtype=torch.float32)
 
