@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.0003)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--save_interval", type=int, default=1000)
+    parser.add_argument("--save_interval", type=int, default=100)
     parser.add_argument("--checkpoint", type=str, default="stretch_predictor.pt")
     parser.add_argument("image_dir", type=str)
     args = parser.parse_args()
@@ -43,6 +43,9 @@ def main():
     opt = Adam(model.parameters(), lr=args.lr)
 
     i = 0
+    test_losses = []
+    best_test_loss = None
+
     while True:
         train_x, train_y = next(train_data)
         test_x, test_y = next(test_data)
@@ -53,8 +56,19 @@ def main():
         opt.zero_grad()
         loss.backward()
         opt.step()
-        print(f"step {i}: loss={loss.item():.05} test={test_loss.item():.05}")
-        if i % args.save_interval == 0:
+        print(
+            f"step {i}: loss={loss.item():.05} test={test_loss.item():.05}"
+            f" best_test={(best_test_loss if best_test_loss is not None else test_loss):.05}"
+        )
+        test_losses.append(test_loss.item())
+        if len(test_losses) > args.save_interval:
+            del test_losses[0]
+        elif len(test_losses) < args.save_interval:
+            continue
+        mean_test_loss = np.mean(test_losses)
+        if best_test_loss is None or mean_test_loss < best_test_loss:
+            best_test_loss = mean_test_loss
+            test_losses.clear()  # don't save too frequently; reset the counter.
             print(f"saving to {args.checkpoint}...")
             with open(args.checkpoint, "wb") as f:
                 torch.save(model.state_dict(), f)
