@@ -34,7 +34,7 @@ async function solve(cornerData) {
     const attempts = 4;
     const samples = diffusion.ddimSample(
         await getDiffusionModel(),
-        nn.Tensor.randn(nn.Shape.make(attempts, 11)),
+        nn.Tensor.randn(nn.Shape.make(attempts, 13)),
         corners.reshape(nn.Shape.make(1, -1)).repeat(0, attempts),
     );
     let bestLoss = null;

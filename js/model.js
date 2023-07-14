@@ -55,7 +55,7 @@
                 "cond_embed.0.bias": nn.Tensor.zeros(Shape.from(512)),
                 "cond_embed.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
                 "cond_embed.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "input_embed.0.weight": nn.Tensor.zeros(Shape.from(512, 11)),
+                "input_embed.0.weight": nn.Tensor.zeros(Shape.from(512, 13)),
                 "input_embed.0.bias": nn.Tensor.zeros(Shape.from(512)),
                 "input_embed.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
                 "input_embed.2.bias": nn.Tensor.zeros(Shape.from(512)),
@@ -69,8 +69,8 @@
                 "backbone.6.bias": nn.Tensor.zeros(Shape.from(512)),
                 "backbone.8.weight": nn.Tensor.zeros(Shape.from(512, 512)),
                 "backbone.8.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.10.weight": nn.Tensor.zeros(Shape.from(22, 512)),
-                "backbone.10.bias": nn.Tensor.zeros(Shape.from(22)),
+                "backbone.10.weight": nn.Tensor.zeros(Shape.from(26, 512)),
+                "backbone.10.bias": nn.Tensor.zeros(Shape.from(26)),
             });
         }
 

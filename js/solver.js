@@ -3,15 +3,16 @@
     const nn = self.nn;
 
     class PerspectiveSolution {
-        constructor(origin, size, rotation, translation) {
+        constructor(origin, size, rotation, translation, postTranslation) {
             this.origin = origin;
             this.size = size;
             this.rotation = rotation;
             this.translation = translation;
+            this.postTranslation = postTranslation;
         }
 
         static fromFlatVec(sample) {
-            if (!sample.shape.equals(nn.Shape.make(11))) {
+            if (!sample.shape.equals(nn.Shape.make(13))) {
                 throw new Error("unexpected shape for sample: " + sample.shape);
             }
             return new PerspectiveSolution(
@@ -19,6 +20,7 @@
                 sample.slice(0, 3, 5),
                 sample.slice(0, 5, 8),
                 sample.slice(0, 8, 11),
+                sample.slice(0, 11, 13),
             );
         }
 
@@ -28,11 +30,14 @@
                 nn.Tensor.zeros(nn.Shape.make(2)),
                 nn.Tensor.zeros(nn.Shape.make(3)),
                 nn.Tensor.zeros(nn.Shape.make(3)),
+                nn.Tensor.zeros(nn.Shape.make(2)),
             );
         }
 
         toFlatVec() {
-            return nn.Tensor.cat([this.origin, this.size, this.rotation, this.translation], 0);
+            return nn.Tensor.cat([
+                this.origin, this.size, this.rotation, this.translation, this.postTranslation
+            ], 0);
         }
 
         iterate(corners, numIters, stepSize) {
@@ -56,6 +61,7 @@
                 this.size.add(gradient.size.scale(scale)),
                 this.rotation.add(gradient.rotation.scale(scale)),
                 this.translation.add(gradient.translation.scale(scale)),
+                this.postTranslation.add(gradient.postTranslation.scale(scale)),
             );
         }
 
@@ -65,12 +71,14 @@
                 this.size.detach(),
                 this.rotation.detach(),
                 this.translation.detach(),
+                this.postTranslation.detach(),
             );
             const grad = new PerspectiveSolution(null, null, null, null);
             gSolution.origin.backward = (x) => grad.origin = x;
             gSolution.size.backward = (x) => grad.size = x;
             gSolution.rotation.backward = (x) => grad.rotation = x;
             gSolution.translation.backward = (x) => grad.translation = x;
+            gSolution.postTranslation.backward = (x) => grad.postTranslation = x;
             const loss = lossFn(gSolution);
             loss.backward(nn.Tensor.fromData(1));
             return [loss.data[0], grad];
@@ -81,7 +89,12 @@
             return (p) => {
                 const [ox, oy, oz] = this.origin.toList();
                 const point3d = nn.Tensor.fromData([[ox + p.x, oy + p.y, oz]]);
-                const proj = cameraProject(rot, this.translation, point3d);
+                const proj = cameraProject(
+                    rot,
+                    this.translation,
+                    this.postTranslation,
+                    point3d,
+                );
                 return { x: proj.data[0], y: proj.data[1] };
             };
         }
@@ -102,7 +115,12 @@
             });
             const corners3d = this.origin.unsqueeze(0).repeat(0, 4).add(offsets);
             const rotation = this.rotationMatrix();
-            const corners2d = cameraProject(rotation, this.translation, corners3d);
+            const corners2d = cameraProject(
+                rotation,
+                this.translation,
+                this.postTranslation,
+                corners3d,
+            );
             return corners.sub(corners2d).pow(2).mean();
         }
 
@@ -150,10 +168,11 @@
         }
     }
 
-    function cameraProject(rotation, translation, points) {
+    function cameraProject(rotation, translation, postTranslation, points) {
         const rotated = nn.matmul(rotation, points.t()).t();
         const tx = rotated.add(translation.unsqueeze(0).repeat(0, points.shape[0]));
-        return divideByZ(tx);
+        const perspectivePoint = divideByZ(tx);
+        return perspectivePoint.add(postTranslation.unsqueeze(0).repeat(0, points.shape[0]));
     }
 
     function divideByZ(coords) {
