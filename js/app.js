@@ -390,15 +390,18 @@ function extractProjectedImage(solution, src, dstCanvas) {
     const scaleY = h / dstCanvas.height;
 
     for (let y = 0; y < dstCanvas.height; y++) {
+        const dstPoints = [];
+        const scaledY = y * scaleY;
         for (let x = 0; x < dstCanvas.width; x++) {
-            const dstPoint = new Point2(x * scaleX, y * scaleY);
-            const sourcePoint = projector(dstPoint);
+            dstPoints.push(new Point2(x * scaleX, scaledY));
+        }
+        projector(dstPoints).forEach((sourcePoint, x) => {
             const sourcePixel = src(sourcePoint.x, sourcePoint.y);
             const idx = (x + y * dstCanvas.width) * 4;
             for (let i = 0; i < 4; i++) {
                 imgData.data[idx + i] = sourcePixel[i];
             }
-        }
+        });
     }
 
     dst.putImageData(imgData, 0, 0);
