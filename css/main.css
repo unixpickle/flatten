@@ -6,7 +6,7 @@ body {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 #container {
@@ -57,7 +57,8 @@ body {
 }
 
 .download-button,
-.close-button {
+.close-button,
+.undo-button {
     display: inline-block;
     text-decoration: none;
     color: white;
@@ -75,4 +76,19 @@ body {
 
 .close-button {
     background-color: #d46565;
+}
+
+.undo-button {
+    /* Center the button */
+    display: block;
+    margin: auto;
+
+    background-color: #d5d5d5;
+    background-image: url(undo.svg);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    width: 40px;
+    height: 40px;
+    color: transparent;
+    font-size: 0;
 }

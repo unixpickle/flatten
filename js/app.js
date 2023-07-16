@@ -78,6 +78,9 @@ class Picker {
         });
         this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
 
+        this.undoButton = this.container.getElementsByClassName("undo-button")[0];
+        this.undoButton.addEventListener("click", () => this.undo());
+
         this.draw();
     }
 
@@ -143,15 +146,12 @@ class Picker {
         if (!this._img) {
             this.promptFileUpload();
         } else if (this._honingPoint) {
-            this._points.push(new Point2(
+            const p = new Point2(
                 this._honingPoint.x + HONING_AREA_SIZE * point.x,
                 this._honingPoint.y + HONING_AREA_SIZE * point.y,
-            ));
+            );
             this._honingPoint = null;
-            if (this._points.length === 4) {
-                this.gotAllPoints();
-            }
-            this.draw();
+            this.addPoint(p);
         } else {
             this._hoveringHoningPoint = null;
             this._honingPoint = this.honingPointForCursor(point);
@@ -181,6 +181,23 @@ class Picker {
         );
     }
 
+    addPoint(point) {
+        this._points.push(point);
+        if (this._points.length === 4) {
+            this.gotAllPoints();
+        }
+        this.draw();
+    }
+
+    undo() {
+        if (this._honingPoint) {
+            this._honingPoint = null;
+        } else if (this._points.length > 0) {
+            this._points.splice(this._points.length - 1, 1);
+        }
+        this.draw();
+    }
+
     resetImage(img) {
         const iw = img.width;
         const ih = img.height;
@@ -198,6 +215,12 @@ class Picker {
     }
 
     draw() {
+        if (!this._isLoading && (this._honingPoint || this._points.length > 0)) {
+            this.undoButton.classList.remove("hidden");
+        } else {
+            this.undoButton.classList.add("hidden");
+        }
+
         const ctx = this.canvas.getContext("2d");
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         if (this._isLoading) {
