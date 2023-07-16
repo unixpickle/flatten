@@ -3,6 +3,48 @@ const HONING_AREA_SIZE = 0.05;
 class App {
     constructor() {
         this.modelClient = new ModelClient();
+        this.picker = new Picker();
+        this.picker.onPick = (points) => this.solve(points);
+    }
+
+    async solve(points) {
+        // This creates resources to efficiently query arbitrary
+        // interpolated pixels of the original image.
+        const pixelSource = this.picker.pixelSource();
+
+        // Solve for the projection resulting in the corner points.
+        const solution = await this.modelClient.solve(points);
+
+        // Create a stretched, square image for the stretch predictor
+        // to operate on.
+        const dstCanvas = document.createElement("canvas");
+        dstCanvas.width = 64;
+        dstCanvas.height = 64;
+        extractProjectedImage(solution, pixelSource, dstCanvas);
+        const imageData = canvasToTensor(dstCanvas).toList();
+
+        // Predict the aspect ratio of the image (as a scalar).
+        const stretch = await this.modelClient.predictStretch(imageData);
+
+        // Ask the user to refine the aspect ratio and download the result.
+        const finishDialog = new FinishDialog(
+            solution,
+            pixelSource,
+            stretch,
+            this.picker.maxDimension(),
+        );
+        this.picker.hide();
+        finishDialog.show();
+        finishDialog.onClose = () => {
+            finishDialog.hide();
+            this.picker.show();
+        };
+    }
+}
+
+class Picker {
+    constructor() {
+        this.onPick = (points) => null;
 
         // State set once an image is picked
         this._img = null;
@@ -22,6 +64,7 @@ class App {
         // Set to true when loading a solution.
         this._isLoading = false;
 
+        this.container = document.getElementById("picker-container");
         this.canvas = document.getElementById("picker");
         this.canvas.addEventListener("dragover", (e) => this.handleDragOver(e), false);
         this.canvas.addEventListener("dragleave", (e) => this.canvas.classList.remove("dragging"));
@@ -106,7 +149,7 @@ class App {
             ));
             this._honingPoint = null;
             if (this._points.length === 4) {
-                this.solve();
+                this.gotAllPoints();
             }
             this.draw();
         } else {
@@ -222,34 +265,22 @@ class App {
         ctx.fillText(text, this.canvas.width / 2, this.canvas.height / 2);
     }
 
-    solve() {
+    gotAllPoints() {
         this._isLoading = true;
-        const pixelSource = this.pixelSource();
+        this.onPick(this._points);
+    }
 
-        let solution = null;
-        this.modelClient.solve(this._points).then((s) => {
-            solution = s;
-            const dstCanvas = document.createElement("canvas");
-            dstCanvas.width = 64;
-            dstCanvas.height = 64;
-            extractProjectedImage(solution, pixelSource, dstCanvas);
-            const imageData = canvasToTensor(dstCanvas).toList();
-            return this.modelClient.predictStretch(imageData);
-        }).then((stretch) => {
-            const finishDialog = new FinishDialog(
-                solution,
-                pixelSource,
-                stretch,
-                Math.max(this._img.width, this._img.height),
-            );
-            this.canvas.parentElement.classList.add("hidden");
-            finishDialog.onClose = () => {
-                finishDialog.hide();
-                this.canvas.parentElement.classList.remove("hidden");
-                this.resetImage(this._img);
-            };
-            finishDialog.show();
-        });
+    hide() {
+        this.container.classList.add("hidden");
+    }
+
+    show() {
+        this.container.classList.remove("hidden");
+        this.resetImage(this._img);
+    }
+
+    maxDimension() {
+        return Math.max(this._img.width, this._img.height);
     }
 
     pixelSource() {
