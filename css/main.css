@@ -41,14 +41,22 @@ body {
     height: 100%;
 }
 
+#picker,
+.scaling-preview {
+    background-image: url(checker.svg);
+    background-size: 20px 20px;
+    background-repeat: repeat;
+}
+
 #finish-dialog {
     position: relative;
     width: 100%;
     text-align: center;
 }
 
-.scaling-preview {
-    background-color: rgba(0, 0, 0, 0.1);
+.side-length {
+    width: 100px;
+    text-align: center;
 }
 
 .setting-field,

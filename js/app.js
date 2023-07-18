@@ -275,7 +275,7 @@ class Picker {
 
     drawText(text) {
         const ctx = this.canvas.getContext("2d");
-        ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+        ctx.fillStyle = "#e5e5e5";
         ctx.beginPath();
         ctx.rect(0, 0, this.canvas.width, this.canvas.height);
         ctx.fill();
