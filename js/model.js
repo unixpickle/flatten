@@ -39,10 +39,7 @@
         }
 
         static async load(path) {
-            const data = await (await fetch(path)).json();
-            const params = {};
-            Object.keys(data).forEach((k) => params[k] = nn.Tensor.fromData(data[k]));
-            return new DiffusionModel(params);
+            return new DiffusionModel(await readParamDict(path));
         }
 
         static zeros() {
@@ -117,10 +114,7 @@
         }
 
         static async load(path) {
-            const data = await (await fetch(path)).json();
-            const params = {};
-            Object.keys(data).forEach((k) => params[k] = nn.Tensor.fromData(data[k]));
-            return new StretchModel(params);
+            return new StretchModel(await readParamDict(path));
         }
 
         forward(x) {
@@ -156,7 +150,53 @@
             }
             params[k] = v;
         });
-        return params
+        return params;
+    }
+
+    async function readParamDict(url) {
+        const buf = await (await fetch(url)).arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const metadataSize = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+        const metadata = JSON.parse(
+            String.fromCharCode.apply(null, bytes.slice(4, 4 + metadataSize)),
+        );
+
+        let allData = new Float32Array(flipToLittleEndian(buf.slice(4 + metadataSize)));
+        const stateDict = {};
+        metadata.forEach((info) => {
+            const [name, rawShape] = info;
+            const shape = nn.Shape.from(rawShape);
+            const param = new nn.Tensor(allData.slice(0, shape.numel()), shape, null);
+            allData = allData.slice(shape.numel());
+            stateDict[name] = param;
+        });
+        return stateDict;
+    }
+
+    function flipToLittleEndian(input) {
+        if (!isBigEndian()) {
+            return input;
+        }
+        let arr = new Uint8Array(input);
+        const output = new ArrayBuffer(arr.length);
+        const out = new Uint8Array(output);
+        for (let i = 0; i < arr.length; i += 4) {
+            const w = arr[i];
+            const x = arr[i + 1];
+            const y = arr[i + 2];
+            const z = arr[i + 3];
+            out[i] = z;
+            out[i + 1] = y;
+            out[i + 2] = x;
+            out[i + 3] = w;
+        }
+        return output;
+    }
+
+    function isBigEndian() {
+        const x = new ArrayBuffer(4);
+        new Float32Array(x)[0] = 1;
+        return new Uint8Array(x)[0] != 0;
     }
 
     nn.DiffusionModel = DiffusionModel;

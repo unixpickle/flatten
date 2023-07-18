@@ -8,7 +8,7 @@ importScripts(
 const ITERATIONS = 10000;
 const STEP_SIZE = 0.001;
 
-let diffusion = nn.GaussianDiffusion.linearDiffusion128();
+let diffusion = nn.GaussianDiffusion.linearDiffusion32();
 let diffusionModel = null;
 let stretchModel = null;
 
@@ -63,7 +63,7 @@ async function getDiffusionModel() {
     if (diffusionModel !== null) {
         return diffusionModel;
     }
-    diffusionModel = await nn.DiffusionModel.load("../models/diffusion.json");
+    diffusionModel = await nn.DiffusionModel.load("../models/diffusion.bin");
     return diffusionModel;
 }
 
@@ -71,6 +71,6 @@ async function getStretchModel() {
     if (stretchModel !== null) {
         return stretchModel;
     }
-    stretchModel = await nn.StretchModel.load("../models/stretch.json");
+    stretchModel = await nn.StretchModel.load("../models/stretch.bin");
     return stretchModel;
 }

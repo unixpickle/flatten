@@ -1,5 +1,7 @@
 import argparse
+import io
 import json
+import struct
 from typing import List, Union
 
 import torch
@@ -7,7 +9,6 @@ import torch
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--precision", type=int, default=4)
     parser.add_argument("input_path")
     parser.add_argument("output_path")
     args = parser.parse_args()
@@ -16,9 +17,15 @@ def main():
     if "model" in sd:
         sd = sd["model"]
 
-    result = {k: round_floats(v.tolist(), args.precision) for k, v in sd.items()}
-    with open(args.output_path, "w") as f:
-        json.dump(result, f)
+    metadata = bytes(json.dumps([(k, v.shape) for k, v in sd.items()]), "utf-8")
+    data = io.BytesIO()
+
+    with open(args.output_path, "wb") as f:
+        f.write(struct.pack("<I", len(metadata)))
+        f.write(metadata)
+        for v in sd.values():
+            data = v.reshape(-1).float().tolist()
+            f.write(struct.pack(f"<{len(data)}f", *data))
 
 
 def round_floats(floats: Union[List[float], float], prec: int):
