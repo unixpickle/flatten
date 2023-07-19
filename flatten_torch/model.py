@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -14,19 +15,21 @@ class DiffusionPredictor(nn.Module):
         d_cond: int = 8,
         d_input: int = 13,
         d_model: int = 512,
+        pos_emb_feats: int = 0,
     ):
         super().__init__()
         self.device = device
         self.d_cond = d_cond
         self.d_input = d_input
         self.d_model = d_model
+        self.pos_emb_feats = pos_emb_feats
         self.time_embed = nn.Sequential(
             nn.Linear(d_model, d_model, device=device),
             nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
         )
         self.cond_embed = nn.Sequential(
-            nn.Linear(d_cond, d_model, device=device),
+            nn.Linear(d_cond * (1 + pos_emb_feats), d_model, device=device),
             nn.ReLU(),
             nn.Linear(d_model, d_model, device=device),
         )
@@ -54,7 +57,7 @@ class DiffusionPredictor(nn.Module):
     ) -> torch.Tensor:
         time_emb = self.time_embed(timestep_embedding(t, self.d_model))
         input_emb = self.input_embed(x)
-        cond_emb = self.cond_embed(cond)
+        cond_emb = self.cond_embed(frequency_pos_embedding(cond, self.pos_emb_feats))
         return self.backbone((time_emb + input_emb + cond_emb) / math.sqrt(3))
 
 
@@ -106,6 +109,19 @@ class DiffusionPrediction:
             ],
             dim=-1,
         )
+
+
+def frequency_pos_embedding(
+    x: torch.Tensor, num_feats: int, max_arg: float = 1000.0
+) -> torch.Tensor:
+    if num_feats == 0:
+        return x
+    assert num_feats % 2 == 0
+    coeffs = torch.linspace(
+        0, math.log(max_arg), num_feats // 2, device=x.device, dtype=x.dtype
+    ).exp()
+    args = (x[..., None] * coeffs).flatten(-2)
+    return torch.cat([x, args.cos(), args.sin()], dim=-1)
 
 
 def timestep_embedding(timesteps, dim, max_period=10000):
