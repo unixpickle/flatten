@@ -14,8 +14,8 @@ def main():
     args = parser.parse_args()
 
     sd = torch.load(args.input_path, map_location="cpu")
-    if "model" in sd:
-        sd = sd["model"]
+    if "ema" in sd:
+        sd = sd["ema"]
 
     metadata = bytes(json.dumps([(k, v.shape) for k, v in sd.items()]), "utf-8")
     data = io.BytesIO()

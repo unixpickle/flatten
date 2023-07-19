@@ -25,7 +25,7 @@ def main():
     )
     with open(LOAD_PATH, "rb") as f:
         obj = torch.load(f, map_location=device)
-        model.load_state_dict(obj["model"])
+        model.load_state_dict(obj["ema"])
 
     batch = Batch.sample_batch(BATCH_SIZE, device=device)
 

@@ -9,13 +9,15 @@ from flatten_torch.gaussian_diffusion import diffusion_from_config
 from flatten_torch.model import DiffusionPrediction, DiffusionPredictor
 
 BATCH_SIZE = 50000
-SAVE_INTERVAL = 5000
+SAVE_INTERVAL = 1000
 SAVE_PATH = "diffusion_model.pt"
+EMA_RATE = 0.9999
 
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DiffusionPredictor(device=device)
+    ema = [x.detach().clone() for x in model.parameters()]
     diffusion = diffusion_from_config(
         dict(
             schedule="linear",
@@ -56,6 +58,9 @@ def main():
         opt.zero_grad()
         loss.backward()
         opt.step()
+        for param, ema_param in zip(model.parameters(), ema):
+            with torch.no_grad():
+                ema_param.mul_(EMA_RATE).add_(param, alpha=1 - EMA_RATE)
         print(f"iter={iter} loss={loss.item()}")
         iter += 1
         if iter % SAVE_INTERVAL == 0:
@@ -64,6 +69,7 @@ def main():
                     dict(
                         opt=opt.state_dict(),
                         model=model.state_dict(),
+                        ema={k: v for (k, _), v in zip(model.named_parameters(), ema)},
                         gen=gen.get_state(),
                         iter=iter,
                     ),

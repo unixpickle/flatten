@@ -14,7 +14,7 @@ class DiffusionPredictor(nn.Module):
         device: torch.device,
         d_cond: int = 8,
         d_input: int = 13,
-        d_model: int = 512,
+        d_model: int = 192,
         pos_emb_feats: int = 0,
     ):
         super().__init__()
