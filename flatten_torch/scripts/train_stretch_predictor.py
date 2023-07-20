@@ -7,11 +7,12 @@ import glob
 import math
 import os
 import random
-from typing import Iterator, Tuple
+from typing import Iterator, Sequence, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from PIL import Image, ImageFile
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
@@ -26,17 +27,17 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--save_interval", type=int, default=100)
     parser.add_argument("--checkpoint", type=str, default="stretch_predictor.pt")
-    parser.add_argument("image_dir", type=str)
+    parser.add_argument("image_dir", type=str, nargs="+")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    test_data = iterate_data(
-        StretchDataset(args.image_dir, valid=True), batch_size=args.batch_size
-    )
-    train_data = iterate_data(
-        StretchDataset(args.image_dir), batch_size=args.batch_size
-    )
+    test_ds = StretchDataset(args.image_dir, valid=True)
+    train_ds = StretchDataset(args.image_dir)
+    test_data = iterate_data(test_ds, batch_size=args.batch_size)
+    train_data = iterate_data(train_ds, batch_size=args.batch_size)
+    print(f"train images: {len(train_ds)}")
+    print(f"test images: {len(test_ds)}")
 
     model = StretchPredictor(device=device)
     print(f"total of {sum(x.numel() for x in model.parameters())} parameters.")
@@ -92,14 +93,21 @@ def _seed_worker(worker_id: int):
 
 
 class StretchDataset(Dataset):
-    def __init__(self, directory: str, valid: bool = False, num_valid: int = 10000):
-        self.image_paths = sorted(glob.glob(os.path.join(directory, "*.jpg")))
+    def __init__(
+        self, directories: Sequence[str], valid: bool = False, num_valid: int = 10000
+    ):
+        self.image_paths = []
+        for directory in directories:
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    if os.path.splitext(file)[1].lower() in {".jpg", ".jpeg"}:
+                        self.image_paths.append(os.path.join(root, file))
+        self.image_paths.sort()
         random.Random(1337).shuffle(self.image_paths)
         if valid:
             self.image_paths = self.image_paths[:num_valid]
         else:
             self.image_paths = self.image_paths[num_valid:]
-        self.resize = Resize((64, 64))
         self.torchify = ToTensor()
         self.augment = (
             nn.Identity()
@@ -117,9 +125,16 @@ class StretchDataset(Dataset):
         image = random_crop(image)
 
         orig_shape = self.torchify(image).shape
-        img = self.augment(self.torchify(self.resize(image)))
-        size = orig_shape[1] / orig_shape[2]
-        return img, torch.tensor(size, dtype=torch.float32)
+        ratio = orig_shape[1] / orig_shape[2]
+
+        img = self.augment(self.torchify(image))
+        # Resizing with torch is and then average pooling is
+        # easier to emulate in JavaScript than resizing with
+        # Pillow's more sophisticated antialiasing.
+        img = F.interpolate(img[None], (128, 128), mode="bilinear")
+        img = F.avg_pool2d(img, 2, 2)[0]
+
+        return img, torch.tensor(ratio, dtype=torch.float32)
 
     def __len__(self):
         return len(self.image_paths)

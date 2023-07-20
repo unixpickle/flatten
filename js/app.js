@@ -18,10 +18,10 @@ class App {
         // Create a stretched, square image for the stretch predictor
         // to operate on.
         const dstCanvas = document.createElement("canvas");
-        dstCanvas.width = 64;
-        dstCanvas.height = 64;
+        dstCanvas.width = 128;
+        dstCanvas.height = 128;
         extractProjectedImage(solution, pixelSource, dstCanvas);
-        const imageData = canvasToTensor(dstCanvas).toList();
+        const imageData = canvasToTensor(dstCanvas).avgPool2d(2).toList();
 
         // Predict the aspect ratio of the image (as a scalar).
         const stretch = await this.modelClient.predictStretch(imageData);
@@ -472,7 +472,6 @@ function canvasToTensor(canvas) {
             }
         }
     }
-    console.log(result);
     return result;
 }
 

@@ -15,7 +15,7 @@ class DiffusionPredictor(nn.Module):
         d_cond: int = 8,
         d_input: int = 13,
         d_model: int = 192,
-        pos_emb_feats: int = 0,
+        pos_emb_feats: int = 30,
     ):
         super().__init__()
         self.device = device

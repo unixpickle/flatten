@@ -522,6 +522,40 @@
 
             return newOutput;
         }
+
+        avgPool2d(size) {
+            if (this.shape.length !== 4 || this.shape[2] % size || this.shape[3] % size) {
+                throw new Error("invalid shape for avg pool of size " + size + ": " + this.shape);
+            }
+            if (this.needsGrad()) {
+                throw new Error("average pooling does not currently support gradients");
+            }
+            const result = Tensor.zeros(
+                Shape.make(
+                    this.shape[0],
+                    this.shape[1],
+                    this.shape[2] / size,
+                    this.shape[3] / size,
+                ),
+            );
+            let inIndex = 0;
+            const mult = 1 / (size * size);
+            for (let i = 0; i < this.shape[0]; i++) {
+                for (let j = 0; j < this.shape[1]; j++) {
+                    for (let k = 0; k < this.shape[2]; k++) {
+                        for (let l = 0; l < this.shape[3]; l++) {
+                            const outK = Math.floor(k / size);
+                            const outL = Math.floor(l / size);
+                            result.data[
+                                ((i * result.shape[1] + j) * result.shape[2] + outK)
+                                * result.shape[3] + outL
+                            ] += this.data[inIndex++] * mult;
+                        }
+                    }
+                }
+            }
+            return result;
+        }
     }
 
     class Linear {
