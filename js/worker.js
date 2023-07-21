@@ -22,28 +22,35 @@ onmessage = (event) => {
         postMessage({ id: msg.id, error: "no such method: " + msg.method });
         return;
     }
-    methods[msg.method].apply(null, msg.args).then((x) => {
+    const statusFn = (x) => {
+        postMessage({ id: msg.id, status: x });
+    };
+    methods[msg.method].apply(null, msg.args.concat([statusFn])).then((x) => {
         postMessage({ id: msg.id, data: x });
     }).catch((e) => {
-        postMessage({ id: msg.id, error: '' + e });
+        postMessage({ id: msg.id, error: "" + e });
     });
 }
 
-async function solve(cornerData) {
+async function solve(cornerData, statusFn) {
     const corners = nn.Tensor.fromData(cornerData);
     const attempts = 4;
+    statusFn("Loading diffusion model...");
+    const model = await getDiffusionModel();
+    statusFn("Sampling diffusion model...");
     const samples = diffusion.ddimSample(
-        await getDiffusionModel(),
+        model,
         nn.Tensor.randn(nn.Shape.make(attempts, 13)),
         corners.reshape(nn.Shape.make(1, -1)).repeat(0, attempts),
     );
     let bestLoss = null;
     let bestSolution = null;
     for (let i = 0; i < attempts; ++i) {
+        statusFn("Refining solution " + (i + 1) + "/" + attempts + "...");
         const row = samples.slice(0, i, i + 1).reshape(nn.Shape.make(-1));
         const solution = nn.PerspectiveSolution.fromFlatVec(row);
         const [initLoss, finalLoss] = solution.iterate(corners, ITERATIONS, STEP_SIZE);
-        console.log("solution " + i + ": loss went from " + initLoss + " => " + finalLoss);
+        // console.log("solution " + i + ": loss went from " + initLoss + " => " + finalLoss);
         if (bestLoss === null || finalLoss < bestLoss) {
             bestLoss = finalLoss;
             bestSolution = solution;
@@ -52,9 +59,11 @@ async function solve(cornerData) {
     return bestSolution.toFlatVec().toList();
 }
 
-async function predictStretch(imageData) {
+async function predictStretch(imageData, statusFn) {
     const x = nn.Tensor.fromData(imageData);
+    statusFn("Loading aspect ratio model...");
     const model = await getStretchModel();
+    statusFn("Predicting aspect ratio...");
     const pred = model.predict(x);
     return pred.toList();
 }

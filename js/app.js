@@ -8,12 +8,14 @@ class App {
     }
 
     async solve(points) {
+        const statusFn = (x) => this.picker.showStatus(x);
+
         // This creates resources to efficiently query arbitrary
         // interpolated pixels of the original image.
         const pixelSource = this.picker.pixelSource();
 
         // Solve for the projection resulting in the corner points.
-        const solution = await this.modelClient.solve(points);
+        const solution = await this.modelClient.solve(points, statusFn);
 
         // Create a stretched, square image for the stretch predictor
         // to operate on.
@@ -24,7 +26,7 @@ class App {
         const imageData = canvasToTensor(dstCanvas).avgPool2d(2).toList();
 
         // Predict the aspect ratio of the image (as a scalar).
-        const stretch = await this.modelClient.predictStretch(imageData);
+        const stretch = await this.modelClient.predictStretch(imageData, statusFn);
 
         // Ask the user to refine the aspect ratio and download the result.
         const finishDialog = new FinishDialog(
@@ -63,6 +65,7 @@ class Picker {
 
         // Set to true when loading a solution.
         this._isLoading = false;
+        this._loadingStatus = null;
 
         this.container = document.getElementById("picker-container");
         this.canvas = document.getElementById("picker");
@@ -224,7 +227,7 @@ class Picker {
         const ctx = this.canvas.getContext("2d");
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         if (this._isLoading) {
-            this.drawText("Loading...");
+            this.drawText(this._loadingStatus);
         } else if (!this._img) {
             this.drawText("Drop files or click here");
         } else if (!this._honingPoint) {
@@ -290,6 +293,7 @@ class Picker {
 
     gotAllPoints() {
         this._isLoading = true;
+        this._loadingStatus = 'Loading...';
         this.onPick(this._points);
     }
 
@@ -300,6 +304,11 @@ class Picker {
     show() {
         this.container.classList.remove("hidden");
         this.resetImage(this._img);
+    }
+
+    showStatus(status) {
+        this._loadingStatus = status;
+        this.draw();
     }
 
     maxDimension() {
