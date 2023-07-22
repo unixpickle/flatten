@@ -12,7 +12,11 @@
         }
 
         numel() {
-            return this.reduce((cur, v) => cur * v, 1);
+            let res = 1;
+            for (let i = 0; i < this.length; ++i) {
+                res *= this[i];
+            }
+            return res;
         }
 
         infer(numel) {
@@ -37,6 +41,19 @@
 
         equals(other) {
             return this.length === other.length && !this.some((x, i) => x !== other[i]);
+        }
+
+        sizesAroundAxis(axis) {
+            const midSize = this[axis];
+            let outerSize = 1;
+            for (let i = 0; i < axis; ++i) {
+                outerSize *= this[i];
+            }
+            let innerSize = 1;
+            for (let i = axis + 1; i < this.length; ++i) {
+                innerSize *= this[i];
+            }
+            return [outerSize, midSize, innerSize];
         }
     }
 
@@ -110,25 +127,28 @@
                 throw new Error("negative axis is not supported");
             }
             // Sanity check for compatible shapes.
-            const fillerShapes = tensors.map((x) => {
-                return Shape.make(...x.shape.slice(0, axis), -1, ...x.shape.slice(axis + 1));
-            });
-            fillerShapes.forEach((x, i) => {
-                if (x.length !== fillerShapes[0].length || !x.equals(fillerShapes[0])) {
-                    throw new Error("incompatible shapes: " + tensors[0].shape + " and " +
-                        tensors[i].shape);
+            for (let i = 1; i < tensors.length; ++i) {
+                const s0 = tensors[0].shape;
+                const s1 = tensors[i].shape;
+                if (s0.length !== s1.length) {
+                    throw new Error("incompatible shapes: " + s0 + " and " + s1);
                 }
-            });
+                for (let j = 0; j < s0.length; ++j) {
+                    if (j != axis) {
+                        if (s0[j] !== s1[j]) {
+                            throw new Error("incompatible shapes: " + s0 + " and " + s1 +
+                                " differ in dimension " + j);
+                        }
+                    }
+                }
+            }
 
-            const newShape = Shape.make(
-                ...tensors[0].shape.slice(0, axis),
-                tensors.reduce((c, x) => c + x.shape[axis], 0),
-                ...tensors[0].shape.slice(axis + 1),
-            );
+            const newShape = tensors[0].shape.slice();
+            for (let i = 1; i < tensors.length; ++i) {
+                newShape[axis] += tensors[i].shape[axis];
+            }
 
-            const midSize = newShape[axis];
-            const outerSize = newShape.slice(0, axis).numel();
-            const innerSize = newShape.slice(axis + 1).numel();
+            const [outerSize, midSize, innerSize] = newShape.sizesAroundAxis(axis);
             const result = Tensor.zeros(newShape);
             let offset = 0;
             tensors.forEach((x) => {
@@ -228,15 +248,7 @@
                 throw new Error("axis " + axis + " out of range");
             }
             const n = this.shape[axis];
-            let innerSize = 1;
-            let outerSize = 1;
-            this.shape.forEach((x, i) => {
-                if (i < axis) {
-                    outerSize *= x;
-                } else if (i > axis) {
-                    innerSize *= x;
-                }
-            });
+            const [outerSize, _midSize, innerSize] = this.shape.sizesAroundAxis(axis);
             const data = new Float32Array(innerSize * outerSize);
             for (let i = 0; i < outerSize; ++i) {
                 for (let j = 0; j < n; ++j) {
@@ -285,7 +297,14 @@
             if (axis < 0) {
                 axis += this.shape.length + 1;
             }
-            const shape = Shape.make(...this.shape.slice(0, axis), 1, ...this.shape.slice(axis));
+            const shape = new Shape(this.shape.length + 1);
+            for (let i = 0; i < axis; ++i) {
+                shape[i] = this.shape[i];
+            }
+            shape[axis] = 1;
+            for (let i = axis; i < this.shape.length; i++) {
+                shape[i + 1] = this.shape[i];
+            }
             return this.reshape(shape);
         }
 
@@ -296,8 +315,7 @@
                 ...this.shape.slice(axis + 1),
             );
             const result = Tensor.zeros(shape);
-            const outerSize = this.shape.slice(0, axis).numel();
-            const innerSize = this.shape.slice(axis).numel();
+            const [outerSize, _midSize, innerSize] = this.shape.sizesAroundAxis(axis);
             for (let i = 0; i < outerSize; ++i) {
                 for (let j = 0; j < innerSize; ++j) {
                     const x = this.data[i * innerSize + j];
@@ -331,14 +349,10 @@
             if (end < start || start < 0 || end > this.shape[axis]) {
                 throw new Error("invalid range");
             }
-            const outerSize = this.shape.slice(0, axis).numel();
-            const innerSize = this.shape.slice(axis + 1).numel();
-            const midSize = this.shape[axis];
-            const result = Tensor.zeros(Shape.make(
-                ...this.shape.slice(0, axis),
-                end - start,
-                ...this.shape.slice(axis + 1),
-            ));
+            const [outerSize, midSize, innerSize] = this.shape.sizesAroundAxis(axis);
+            const newShape = this.shape.slice();
+            newShape[axis] = end - start;
+            const result = Tensor.zeros(newShape);
             for (let i = 0; i < outerSize; ++i) {
                 for (let j = 0; j < end - start; ++j) {
                     for (let k = 0; k < innerSize; ++k) {
