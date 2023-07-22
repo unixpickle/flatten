@@ -88,24 +88,19 @@
             const rot = this.rotationMatrix();
             const [ox, oy, oz] = this.origin.toList();
             return (p) => {
-                const points3d = nn.Tensor.zeros(nn.Shape.make(p.length, 3));
-                p.forEach((point, i) => {
-                    points3d.data[i * 3] = ox + point.x;
-                    points3d.data[i * 3 + 1] = oy + point.y;
+                const points3d = nn.Tensor.zeros(nn.Shape.make(p.shape[0], 3));
+                for (let i = 0; i < p.shape[0]; i++) {
+                    points3d.data[i * 3] = p.data[i * 2] + ox;
+                    points3d.data[i * 3 + 1] = p.data[i * 2 + 1] + oy;
                     points3d.data[i * 3 + 2] = oz;
-                });
+                }
                 const proj = cameraProject(
                     rot,
                     this.translation,
                     this.postTranslation,
                     points3d,
                 );
-                return p.map((_, i) => {
-                    return {
-                        x: proj.data[i * 2],
-                        y: proj.data[i * 2 + 1],
-                    };
-                });
+                return proj;
             };
         }
 

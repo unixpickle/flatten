@@ -333,30 +333,41 @@ class Picker {
         );
 
         const data = ctx.getImageData(0, 0, extractionCanvas.width, extractionCanvas.height);
-        return (relX, relY) => {
+        return (coords) => {
             const eps = 1e-5; // make sure to never go out of bounds
-            const x = Math.max(0, Math.min(1, relX)) * (extractionCanvas.width - 1 - eps);
-            const y = Math.max(0, Math.min(1, relY)) * (extractionCanvas.height - 1 - eps);
-            const minX = Math.floor(x);
-            const minY = Math.floor(y);
+            const xScale = (extractionCanvas.width - 1 - eps);
+            const yScale = (extractionCanvas.height - 1 - eps);
 
-            const fracX = x - minX;
-            const fracY = y - minY;
+            const output = nn.Tensor.zeros(nn.Shape.make(coords.shape[0], 4));
+            for (let outIdx = 0; outIdx < coords.shape[0]; outIdx++) {
+                const outOffset = outIdx * 4;
+                const relX = coords.data[outIdx * 2];
+                const relY = coords.data[outIdx * 2 + 1];
 
-            const result = [0, 0, 0, 0];
-            for (let i = 0; i < 2; i++) {
-                const wy = (i === 0 ? 1 - fracY : fracY);
-                for (let j = 0; j < 2; j++) {
-                    const wx = (j === 0 ? 1 - fracX : fracX);
-                    const w = wx * wy;
-                    const offset = ((minX + j) + (minY + i) * extractionCanvas.width) * 4;
-                    for (let k = 0; k < 4; k++) {
-                        result[k] += w * data.data[offset + k];
+                const x = Math.max(0, Math.min(1, relX)) * xScale;
+                const y = Math.max(0, Math.min(1, relY)) * yScale;
+                const minX = Math.floor(x);
+                const minY = Math.floor(y);
+
+                const fracX = x - minX;
+                const fracY = y - minY;
+
+                for (let i = 0; i < 2; i++) {
+                    const wy = (i === 0 ? 1 - fracY : fracY);
+                    for (let j = 0; j < 2; j++) {
+                        const wx = (j === 0 ? 1 - fracX : fracX);
+                        const w = wx * wy;
+                        const offset = ((minX + j) + (minY + i) * extractionCanvas.width) * 4;
+                        for (let k = 0; k < 4; k++) {
+                            output.data[outOffset + k] += w * data.data[offset + k];
+                        }
                     }
                 }
             }
-
-            return result.map((x) => Math.round(x));
+            for (let i = 0; i < output.data.length; i++) {
+                output.data[i] = Math.round(output.data[i]);
+            }
+            return output;
         };
     }
 }
@@ -452,19 +463,19 @@ function extractProjectedImage(solution, src, dstCanvas) {
     const scaleX = w / dstCanvas.width;
     const scaleY = h / dstCanvas.height;
 
+    const dstPoints = nn.Tensor.zeros(nn.Shape.make(dstCanvas.width, 2));
     for (let y = 0; y < dstCanvas.height; y++) {
-        const dstPoints = [];
         const scaledY = y * scaleY;
-        for (let x = 0; x < dstCanvas.width; x++) {
-            dstPoints.push(new Point2(x * scaleX, scaledY));
+        for (let x = 0; x < dstPoints.shape[0]; x++) {
+            dstPoints.data[x * 2] = x * scaleX;
+            dstPoints.data[x * 2 + 1] = scaledY;
         }
-        projector(dstPoints).forEach((sourcePoint, x) => {
-            const sourcePixel = src(sourcePoint.x, sourcePoint.y);
-            const idx = (x + y * dstCanvas.width) * 4;
-            for (let i = 0; i < 4; i++) {
-                imgData.data[idx + i] = sourcePixel[i];
-            }
-        });
+        const srcPoints = projector(dstPoints);
+        const sourcePixels = src(srcPoints);
+        const offset = y * sourcePixels.shape.numel();
+        for (let i = 0; i < sourcePixels.data.length; i++) {
+            imgData.data[offset + i] = sourcePixels.data[i];
+        };
     }
 
     dst.putImageData(imgData, 0, 0);
