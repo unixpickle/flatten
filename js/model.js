@@ -76,7 +76,8 @@
         for (let i = 0; i < numFeats / 2; i++) {
             coeffs.data[i] = Math.exp(i * (maxLog / (numFeats / 2 - 1)));
         }
-        let args = coords.unsqueeze(-1).repeat(coords.shape.length, numFeats / 2);
+        const repCoeffs = coeffs.unsqueeze(0).unsqueeze(0).repeat(0, coords.shape[0]).repeat(1, coords.shape[1]);
+        let args = coords.unsqueeze(-1).repeat(coords.shape.length, numFeats / 2).mul(repCoeffs);
         args = args.reshape(nn.Shape.make(args.shape[0], -1));
         return nn.Tensor.cat([coords, args.cos(), args.sin()], 1);
     }
