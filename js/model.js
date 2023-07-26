@@ -3,11 +3,12 @@
     const nn = self.nn;
 
     class DiffusionModel {
-        constructor(rawParams) {
+        constructor(rawParams, numFeats) {
             const params = transposeWeights(rawParams);
+            this.numFeats = numFeats || 30;
             this.params = params;
             this.dModel = this.params["time_embed.2.bias"].shape[0];
-            this.dCond = this.params["cond_embed.0.weight"].shape[1];
+            this.dCond = this.params["cond_embed.0.weight"].shape[1] / (1 + this.numFeats);
             this.timeEmbed = new nn.Sequential([
                 new nn.Linear(this.params["time_embed.0.weight"], this.params["time_embed.0.bias"]),
                 new nn.ReLU(),
@@ -42,39 +43,10 @@
             return new DiffusionModel(await readParamDict(path));
         }
 
-        static zeros() {
-            return new DiffusionModel({
-                "time_embed.0.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "time_embed.0.bias": nn.Tensor.zeros(Shape.from(512)),
-                "time_embed.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "time_embed.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "cond_embed.0.weight": nn.Tensor.zeros(Shape.from(512, 8)),
-                "cond_embed.0.bias": nn.Tensor.zeros(Shape.from(512)),
-                "cond_embed.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "cond_embed.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "input_embed.0.weight": nn.Tensor.zeros(Shape.from(512, 13)),
-                "input_embed.0.bias": nn.Tensor.zeros(Shape.from(512)),
-                "input_embed.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "input_embed.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.0.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "backbone.0.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.2.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "backbone.2.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.4.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "backbone.4.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.6.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "backbone.6.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.8.weight": nn.Tensor.zeros(Shape.from(512, 512)),
-                "backbone.8.bias": nn.Tensor.zeros(Shape.from(512)),
-                "backbone.10.weight": nn.Tensor.zeros(Shape.from(26, 512)),
-                "backbone.10.bias": nn.Tensor.zeros(Shape.from(26)),
-            });
-        }
-
         forward(x, t, cond) {
             const timeEmb = this.timeEmbed.forward(timestepEmbedding(t, this.dModel));
             const inputEmb = this.inputEmbed.forward(x);
-            const condEmb = this.condEmbed.forward(cond);
+            const condEmb = this.condEmbed.forward(frequencyPosEmbedding(cond, this.numFeats));
             const combined = timeEmb.add(inputEmb).add(condEmb).scale(1 / Math.sqrt(3));
             return this.backbone.forward(combined);
         }
@@ -92,6 +64,21 @@
         const args = freqs.mul(timesteps.reshape(nn.Shape.make(-1, 1)).repeat(1, freqs.shape[1]));
         const embedding = nn.Tensor.cat([args.cos(), args.sin()], 1);
         return embedding;
+    }
+
+    function frequencyPosEmbedding(coords, numFeats) {
+        const maxArg = 1000.0;
+        if (!numFeats) {
+            return coords;
+        }
+        const coeffs = nn.Tensor.zeros(nn.Shape.make(numFeats / 2));
+        const maxLog = Math.log(maxArg);
+        for (let i = 0; i < numFeats / 2; i++) {
+            coeffs.data[i] = Math.exp(i * (maxLog / (numFeats / 2 - 1)));
+        }
+        let args = coords.unsqueeze(-1).repeat(coords.shape.length, numFeats / 2);
+        args = args.reshape(nn.Shape.make(args.shape[0], -1));
+        return nn.Tensor.cat([coords, args.cos(), args.sin()], 1);
     }
 
     class StretchModel {
