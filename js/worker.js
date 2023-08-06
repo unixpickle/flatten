@@ -3,6 +3,7 @@ importScripts(
     "model.js",
     "diffusion.js",
     "solver.js",
+    "pixel_source.js",
 );
 
 const ITERATIONS = 10000;
@@ -16,6 +17,7 @@ onmessage = (event) => {
     const methods = {
         "solve": solve,
         "predictStretch": predictStretch,
+        "exportImage": exportImage,
     }
     const msg = event.data;
     if (!methods.hasOwnProperty(msg.method)) {
@@ -66,6 +68,32 @@ async function predictStretch(imageData, statusFn) {
     statusFn("Predicting aspect ratio...");
     const pred = model.predict(x);
     return pred.toList();
+}
+
+async function exportImage(rawSolution, rawPixelSource, aspectRatio, sideLength, statusFn) {
+    const solution = nn.PerspectiveSolution.fromFlatVec(nn.Tensor.fromData(rawSolution));
+    const pixelSource = nn.PixelSource.deserialize(rawPixelSource);
+
+    const w = 1;
+    const h = aspectRatio;
+    const scale = Math.min(sideLength / w, sideLength / h);
+
+    const dstCanvas = new OffscreenCanvas(w * scale, h * scale);
+    pixelSource.extractProjectedImage(solution, dstCanvas);
+
+    // https://stackoverflow.com/questions/12796513/html5-canvas-to-png-file
+    const blob = await dstCanvas.convertToBlob({ type: "image/png" });
+    const fr = new FileReaderSync();
+    let dt = fr.readAsDataURL(blob);
+    dt = dt.replace(/^data:image\/[^;]*/, "data:application/octet-stream");
+
+    const filename = "flattened_" + Math.round(new Date().getTime() / 1000) + ".png";
+    dt = dt.replace(
+        /^data:application\/octet-stream/,
+        "data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=" + filename,
+    );
+
+    return dt;
 }
 
 async function getDiffusionModel() {

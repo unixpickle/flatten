@@ -54,6 +54,11 @@ body {
     text-align: center;
 }
 
+.finish-dialog-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
 .side-length {
     width: 100px;
     text-align: center;

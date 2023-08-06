@@ -41,4 +41,14 @@ class ModelClient {
     async predictStretch(imageData, statusFn) {
         return this._call(statusFn, 'predictStretch', [imageData]).then((preds) => preds[0]);
     }
+
+    async exportImage(solution, pixelSource, aspectRatio, sideLength) {
+        const statusFn = (_) => null;
+        return this._call(statusFn, 'exportImage', [
+            solution.toFlatVec().toList(),
+            pixelSource.serialize(),
+            aspectRatio,
+            sideLength,
+        ]);
+    }
 }

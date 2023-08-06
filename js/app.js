@@ -22,7 +22,7 @@ class App {
         const dstCanvas = document.createElement("canvas");
         dstCanvas.width = 128;
         dstCanvas.height = 128;
-        extractProjectedImage(solution, pixelSource, dstCanvas);
+        pixelSource.extractProjectedImage(solution, dstCanvas);
         const imageData = canvasToTensor(dstCanvas).avgPool2d(2).toList();
 
         // Predict the aspect ratio of the image (as a scalar).
@@ -34,6 +34,7 @@ class App {
             pixelSource,
             stretch,
             this.picker.maxDimension(),
+            this.modelClient,
         );
         this.picker.hide();
         finishDialog.show();
@@ -293,7 +294,7 @@ class Picker {
 
     gotAllPoints() {
         this._isLoading = true;
-        this._loadingStatus = 'Loading...';
+        this._loadingStatus = "Loading...";
         this.onPick(this._points);
     }
 
@@ -331,51 +332,15 @@ class Picker {
             this._scale * this._img.width * scale,
             this._scale * this._img.height * scale,
         );
-
-        const data = ctx.getImageData(0, 0, extractionCanvas.width, extractionCanvas.height);
-        return (coords) => {
-            const eps = 1e-5; // make sure to never go out of bounds
-            const xScale = (extractionCanvas.width - 1 - eps);
-            const yScale = (extractionCanvas.height - 1 - eps);
-
-            const output = nn.Tensor.zeros(nn.Shape.make(coords.shape[0], 4));
-            for (let outIdx = 0; outIdx < coords.shape[0]; outIdx++) {
-                const outOffset = outIdx * 4;
-                const relX = coords.data[outIdx * 2];
-                const relY = coords.data[outIdx * 2 + 1];
-
-                const x = Math.max(0, Math.min(1, relX)) * xScale;
-                const y = Math.max(0, Math.min(1, relY)) * yScale;
-                const minX = Math.floor(x);
-                const minY = Math.floor(y);
-
-                const fracX = x - minX;
-                const fracY = y - minY;
-
-                for (let i = 0; i < 2; i++) {
-                    const wy = (i === 0 ? 1 - fracY : fracY);
-                    for (let j = 0; j < 2; j++) {
-                        const wx = (j === 0 ? 1 - fracX : fracX);
-                        const w = wx * wy;
-                        const offset = ((minX + j) + (minY + i) * extractionCanvas.width) * 4;
-                        for (let k = 0; k < 4; k++) {
-                            output.data[outOffset + k] += w * data.data[offset + k];
-                        }
-                    }
-                }
-            }
-            for (let i = 0; i < output.data.length; i++) {
-                output.data[i] = Math.round(output.data[i]);
-            }
-            return output;
-        };
+        return nn.PixelSource.fromCanvas(extractionCanvas);
     }
 }
 
 class FinishDialog {
-    constructor(solution, pixelSource, aspectRatio, defaultSize) {
+    constructor(solution, pixelSource, aspectRatio, defaultSize, modelClient) {
         this.solution = solution;
         this.pixelSource = pixelSource;
+        this.modelClient = modelClient;
 
         this.element = document.getElementById("finish-dialog");
         this.previewContainer = this.element.getElementsByClassName("scaling-preview")[0];
@@ -387,34 +352,26 @@ class FinishDialog {
 
         this.onClose = () => null;
         this.closeButton.addEventListener("click", () => this.onClose());
-        this.downloadButton.addEventListener("click", () => {
-            this.downloadButton.href = this.downloadURL();
-        }, false);
+        this.downloadButton.addEventListener("click", (e) => {
+            if (this.downloadButton.textContent === "Prepare") {
+                e.preventDefault();
+                this.prepareDownload();
+            };
+        });
+        this.downloadButton.textContent = "Prepare";
 
         this.aspectRatio.value = Math.log(aspectRatio);
         this.sideLength.value = defaultSize;
 
-        this.previewCanvas = this.createCanvas(1, 256);
+        this.previewCanvas = document.createElement("canvas");
+        this.previewCanvas.width = 256;
+        this.previewCanvas.height = 256;
+        this.pixelSource.extractProjectedImage(this.solution, this.previewCanvas);
         this.previewCanvas.style.position = "absolute";
         this.updateAspectRatio();
         this.previewContainer.appendChild(this.previewCanvas);
 
         this.aspectRatio.addEventListener("input", () => this.updateAspectRatio());
-    }
-
-    createCanvas(aspectRatio, sideLength) {
-        aspectRatio = aspectRatio || Math.exp(parseFloat(this.aspectRatio.value));
-        sideLength = sideLength || parseInt(this.sideLength.value);
-
-        const w = 1;
-        const h = aspectRatio;
-        const scale = Math.min(sideLength / w, sideLength / h);
-
-        const dstCanvas = document.createElement("canvas");
-        dstCanvas.width = w * scale;
-        dstCanvas.height = h * scale;
-        extractProjectedImage(this.solution, this.pixelSource, dstCanvas);
-        return dstCanvas;
     }
 
     updateAspectRatio() {
@@ -432,16 +389,25 @@ class FinishDialog {
         }
     }
 
-    downloadURL() {
-        const canvas = this.createCanvas();
-        // https://stackoverflow.com/questions/12796513/html5-canvas-to-png-file
-        let dt = canvas.toDataURL("image/png");
-        dt = dt.replace(/^data:image\/[^;]*/, "data:application/octet-stream");
-        dt = dt.replace(
-            /^data:application\/octet-stream/,
-            "data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=flattened.png",
-        );
-        return dt;
+    async prepareDownload() {
+        const aspectRatio = Math.exp(parseFloat(this.aspectRatio.value));
+        const sideLength = parseInt(this.sideLength.value);
+        this.element.classList.add("finish-dialog-disabled");
+        try {
+            const downloadURL = await this.modelClient.exportImage(
+                this.solution,
+                this.pixelSource,
+                aspectRatio,
+                sideLength,
+            );
+            this.downloadButton.href = downloadURL;
+            this.downloadButton.textContent = "Download";
+            this.downloadButton.download = (
+                "flattened_" + Math.round(new Date().getTime() / 1000) + ".png"
+            );
+        } finally {
+            this.element.classList.remove("finish-dialog-disabled");
+        }
     }
 
     show() {
@@ -451,34 +417,6 @@ class FinishDialog {
     hide() {
         this.element.style.display = "none";
     }
-}
-
-function extractProjectedImage(solution, src, dstCanvas) {
-    const projector = solution.projector();
-
-    const dst = dstCanvas.getContext("2d");
-    const imgData = dst.createImageData(dstCanvas.width, dstCanvas.height);
-
-    const [w, h] = solution.size.toList();
-    const scaleX = w / dstCanvas.width;
-    const scaleY = h / dstCanvas.height;
-
-    const dstPoints = nn.Tensor.zeros(nn.Shape.make(dstCanvas.width, 2));
-    for (let y = 0; y < dstCanvas.height; y++) {
-        const scaledY = y * scaleY;
-        for (let x = 0; x < dstPoints.shape[0]; x++) {
-            dstPoints.data[x * 2] = x * scaleX;
-            dstPoints.data[x * 2 + 1] = scaledY;
-        }
-        const srcPoints = projector(dstPoints);
-        const sourcePixels = src(srcPoints);
-        const offset = y * sourcePixels.shape.numel();
-        for (let i = 0; i < sourcePixels.data.length; i++) {
-            imgData.data[offset + i] = sourcePixels.data[i];
-        };
-    }
-
-    dst.putImageData(imgData, 0, 0);
 }
 
 function canvasToTensor(canvas) {
