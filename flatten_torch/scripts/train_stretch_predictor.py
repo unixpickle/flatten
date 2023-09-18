@@ -40,6 +40,10 @@ def main():
     print(f"test images: {len(test_ds)}")
 
     model = StretchPredictor(device=device)
+    if os.path.exists(args.checkpoint):
+        print(f"loading from {args.checkpoint}...")
+        torch.save(model.state_dict(), args.checkpoint)
+
     print(f"total of {sum(x.numel() for x in model.parameters())} parameters.")
     opt = Adam(model.parameters(), lr=args.lr)
 
@@ -71,8 +75,7 @@ def main():
             best_test_loss = mean_test_loss
             test_losses.clear()  # don't save too frequently; reset the counter.
             print(f"saving to {args.checkpoint}...")
-            with open(args.checkpoint, "wb") as f:
-                torch.save(model.state_dict(), f)
+            torch.save(model.state_dict(), args.checkpoint)
 
 
 def iterate_data(
