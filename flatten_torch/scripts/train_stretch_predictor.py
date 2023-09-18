@@ -42,7 +42,7 @@ def main():
     model = StretchPredictor(device=device)
     if os.path.exists(args.checkpoint):
         print(f"loading from {args.checkpoint}...")
-        torch.save(model.state_dict(), args.checkpoint)
+        model.load_state_dict(torch.save(model.state_dict(), args.checkpoint))
 
     print(f"total of {sum(x.numel() for x in model.parameters())} parameters.")
     opt = Adam(model.parameters(), lr=args.lr)
