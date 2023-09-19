@@ -1,54 +1,71 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 class ModelClient {
     constructor() {
-        this._worker = new Worker("js/worker.js");
-        this._callbacks = {};
-        this._curRequestId = 0;
-        this._worker.onmessage = (e) => {
+        this.worker = new Worker("js/worker.js");
+        this.callbacks = {};
+        this.curRequestId = 0;
+        this.worker.onmessage = (e) => {
             const msg = e.data;
-            const [resolve, reject, statusFn] = this._callbacks[msg.id];
+            const cb = this.callbacks[msg.id];
             if (msg["error"]) {
-                reject(new Error(msg.error));
-                delete this._callbacks[msg.id];
-            } else if (msg["status"]) {
-                statusFn(msg["status"]);
-            } else {
-                resolve(msg.data);
-                delete this._callbacks[msg.id];
+                cb.reject(new Error(msg.error));
+                delete this.callbacks[msg.id];
+            }
+            else if (msg["status"]) {
+                cb.status(msg["status"]);
+            }
+            else {
+                cb.resolve(msg.data);
+                delete this.callbacks[msg.id];
             }
         };
     }
-
-    async _call(statusFn, method, args) {
-        const reqId = this._curRequestId++;
-        const promise = new Promise((resolve, reject) => {
-            this._callbacks[reqId] = [resolve, reject, statusFn];
-        });
-        this._worker.postMessage({
-            id: reqId,
-            method: method,
-            args: args,
-        });
-        return promise;
-    }
-
-    async solve(points, statusFn) {
-        return this._call(statusFn, 'solve', [points.map((p) => [p.x, p.y])]).then((sol) => {
-            const solVec = nn.Tensor.fromData(sol);
-            return nn.PerspectiveSolution.fromFlatVec(solVec);
+    call(statusFn, method, args) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const reqId = this.curRequestId++;
+            const promise = new Promise((resolve, reject) => {
+                this.callbacks[reqId] = { resolve: resolve, reject: reject, status: statusFn };
+            });
+            this.worker.postMessage({
+                id: reqId,
+                method: method,
+                args: args,
+            });
+            return promise;
         });
     }
-
-    async predictStretch(imageData, statusFn) {
-        return this._call(statusFn, 'predictStretch', [imageData]).then((preds) => preds[0]);
+    solve(points, statusFn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sol = yield this.call(statusFn, 'solve', [points.map((p) => [p.x, p.y])]);
+            const solVec = Tensor.fromData(sol);
+            return PerspectiveSolution.fromFlatVec(solVec);
+        });
     }
-
-    async exportImage(solution, pixelSource, aspectRatio, sideLength) {
-        const statusFn = (_) => null;
-        return this._call(statusFn, 'exportImage', [
-            solution.toFlatVec().toList(),
-            pixelSource.serialize(),
-            aspectRatio,
-            sideLength,
-        ]);
+    predictStretch(imageData, statusFn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const preds = yield this.call(statusFn, 'predictStretch', [imageData]);
+            return preds[0];
+        });
+    }
+    exportImage(solution, pixelSource, aspectRatio, sideLength) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.call(noopStatusFunc, 'exportImage', [
+                solution.toFlatVec().toList(),
+                pixelSource.serialize(),
+                aspectRatio,
+                sideLength,
+            ]);
+        });
     }
 }
+function noopStatusFunc(_) {
+}
+//# sourceMappingURL=client.js.map

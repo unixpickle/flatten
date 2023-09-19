@@ -1,15 +1,15 @@
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
+type ParamDict = { [key: string]: Tensor };
+
 class DiffusionModel {
-    constructor(rawParams, numFeats) {
-        this.numFeats = numFeats;
+    public params: ParamDict;
+    public dModel: number;
+    public dCond: number;
+    public timeEmbed: Sequential;
+    public condEmbed: Sequential;
+    public inputEmbed: Sequential;
+    public backbone: Sequential;
+
+    constructor(rawParams: ParamDict, public numFeats?: number) {
         const params = transposeWeights(rawParams);
         this.numFeats = numFeats || 30;
         this.params = params;
@@ -44,12 +44,12 @@ class DiffusionModel {
             new Linear(this.params["backbone.10.weight"], this.params["backbone.10.bias"]),
         ]);
     }
-    static load(path) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return new DiffusionModel(yield readParamDict(path));
-        });
+
+    static async load(path: string): Promise<DiffusionModel> {
+        return new DiffusionModel(await readParamDict(path));
     }
-    forward(x, t, cond) {
+
+    forward(x: Tensor, t: Tensor, cond: Tensor): Tensor {
         const timeEmb = this.timeEmbed.forward(timestepEmbedding(t, this.dModel));
         const inputEmb = this.inputEmbed.forward(x);
         const condEmb = this.condEmbed.forward(frequencyPosEmbedding(cond, this.numFeats));
@@ -57,7 +57,8 @@ class DiffusionModel {
         return this.backbone.forward(combined);
     }
 }
-function timestepEmbedding(timesteps, dim) {
+
+function timestepEmbedding(timesteps: Tensor, dim: number) {
     const maxPeriod = 10000;
     const range = Tensor.zeros(Shape.make(1, dim / 2));
     for (let i = 0; i < dim / 2; ++i) {
@@ -70,7 +71,8 @@ function timestepEmbedding(timesteps, dim) {
     const embedding = Tensor.cat([args.cos(), args.sin()], 1);
     return embedding;
 }
-function frequencyPosEmbedding(coords, numFeats) {
+
+function frequencyPosEmbedding(coords: Tensor, numFeats?: number) {
     const maxArg = 1000.0;
     if (!numFeats) {
         return coords;
@@ -85,8 +87,13 @@ function frequencyPosEmbedding(coords, numFeats) {
     args = args.reshape(Shape.make(args.shape[0], -1));
     return Tensor.cat([coords, args.cos(), args.sin()], 1);
 }
+
 class StretchModel {
-    constructor(rawParams) {
+    public params: ParamDict;
+    public backbone: Sequential;
+    public ratios: Tensor;
+
+    constructor(rawParams: ParamDict) {
         const params = transposeWeights(rawParams);
         this.params = params;
         this.backbone = new Sequential([
@@ -103,15 +110,16 @@ class StretchModel {
         ]);
         this.ratios = params['ratios'];
     }
-    static load(path) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return new StretchModel(yield readParamDict(path));
-        });
+
+    static async load(path: string): Promise<StretchModel> {
+        return new StretchModel(await readParamDict(path));
     }
-    forward(x) {
+
+    forward(x: Tensor): Tensor {
         return this.backbone.forward(x);
     }
-    predict(x) {
+
+    predict(x: Tensor): Tensor {
         const logits = this.forward(x);
         const results = [];
         let offset = 0;
@@ -130,8 +138,9 @@ class StretchModel {
         return Tensor.fromData([results]);
     }
 }
-function transposeWeights(rawParams) {
-    const params = {};
+
+function transposeWeights(rawParams: ParamDict): ParamDict {
+    const params = {} as ParamDict;
     Object.keys(rawParams).forEach((k) => {
         let v = rawParams[k];
         if (v.shape.length === 2) {
@@ -141,25 +150,28 @@ function transposeWeights(rawParams) {
     });
     return params;
 }
-function readParamDict(url) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const buf = yield (yield fetch(url)).arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        const metadataSize = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
-        const metadata = JSON.parse(String.fromCharCode.apply(null, bytes.slice(4, 4 + metadataSize)));
-        let allData = new Float32Array(flipToLittleEndian(buf.slice(4 + metadataSize)));
-        const stateDict = {};
-        metadata.forEach((info) => {
-            const [name, rawShape] = info;
-            const shape = Shape.from(rawShape);
-            const param = new Tensor(allData.slice(0, shape.numel()), shape, null);
-            allData = allData.slice(shape.numel());
-            stateDict[name] = param;
-        });
-        return stateDict;
+
+async function readParamDict(url: string): Promise<ParamDict> {
+    const buf = await (await fetch(url)).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const metadataSize = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+    const metadata = JSON.parse(
+        String.fromCharCode.apply(null, bytes.slice(4, 4 + metadataSize)),
+    );
+
+    let allData = new Float32Array(flipToLittleEndian(buf.slice(4 + metadataSize)));
+    const stateDict = {} as ParamDict;
+    metadata.forEach((info: [string, number[]]) => {
+        const [name, rawShape] = info;
+        const shape = Shape.from(rawShape);
+        const param = new Tensor(allData.slice(0, shape.numel()), shape, null);
+        allData = allData.slice(shape.numel());
+        stateDict[name] = param;
     });
+    return stateDict;
 }
-function flipToLittleEndian(input) {
+
+function flipToLittleEndian(input: ArrayBuffer): ArrayBuffer {
     if (!isBigEndian()) {
         return input;
     }
@@ -178,9 +190,9 @@ function flipToLittleEndian(input) {
     }
     return output;
 }
+
 function isBigEndian() {
     const x = new ArrayBuffer(4);
     new Float32Array(x)[0] = 1;
     return new Uint8Array(x)[0] != 0;
 }
-//# sourceMappingURL=model.js.map

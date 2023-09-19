@@ -1,9 +1,13 @@
 class GaussianDiffusion {
-    constructor(timestepMap, betas) {
+    public alphasCumprod: number[];
+    public alphasCumprodPrev: number[];
+    public sqrtRecipAlphasCumprod: number[];
+    public sqrtRecipm1AlphasCumprod: number[];
+
+    constructor(public timestepMap: number[], public betas: number[]) {
         this.timestepMap = timestepMap;
         this.betas = betas;
-        this.timestepMap = timestepMap;
-        this.betas = betas;
+
         this.alphasCumprod = [];
         this.alphasCumprodPrev = [];
         this.sqrtRecipAlphasCumprod = [];
@@ -18,13 +22,16 @@ class GaussianDiffusion {
             this.sqrtRecipm1AlphasCumprod.push(Math.sqrt(1 / cumprod - 1));
         });
     }
-    static linearDiffusion128() {
+
+    static linearDiffusion128(): GaussianDiffusion {
         return new GaussianDiffusion(TIMESTEP_MAP_128, LINEAR_BETAS_128);
     }
-    static linearDiffusion32() {
+
+    static linearDiffusion32(): GaussianDiffusion {
         return new GaussianDiffusion(TIMESTEP_MAP_32, LINEAR_BETAS_32);
     }
-    ddimStep(model, x, t, cond) {
+
+    ddimStep(model: DiffusionModel, x: Tensor, t: number, cond: Tensor) {
         const ts = Tensor.fromData([this.timestepMap[t]]).repeat(0, x.shape[0]);
         const fullOut = model.forward(x, ts, cond);
         const eps = fullOut.slice(1, 0, fullOut.shape[1] / 2);
@@ -36,7 +43,8 @@ class GaussianDiffusion {
             .scale(Math.sqrt(alphaBarPrev))
             .add(eps.scale(Math.sqrt(1 - alphaBarPrev)));
     }
-    ddimSample(model, x0, cond) {
+
+    ddimSample(model: DiffusionModel, x0: Tensor, cond: Tensor) {
         let x = x0;
         for (let t = this.alphasCumprod.length - 1; t >= 0; --t) {
             x = this.ddimStep(model, x, t, cond);
@@ -44,6 +52,7 @@ class GaussianDiffusion {
         return x;
     }
 }
+
 const LINEAR_BETAS_128 = [
     9.76562500e-05, 1.46419891e-03, 2.67778225e-03, 3.89007483e-03,
     5.10107781e-03, 6.31079237e-03, 7.51921968e-03, 8.72636093e-03,
@@ -90,6 +99,7 @@ const TIMESTEP_MAP_128 = [
     822, 830, 838, 846, 854, 862, 870, 878, 886, 894, 902, 910, 918,
     926, 934, 942, 951, 959, 967, 975, 983, 991, 999, 1007, 1015, 1023,
 ];
+
 const TIMESTEP_MAP_32 = [
     0, 33, 66, 99, 132, 165, 198, 231, 264, 297, 330, 363, 396, 429,
     462, 495, 528, 561, 594, 627, 660, 693, 726, 759, 792, 825, 858, 891,
@@ -105,4 +115,3 @@ const LINEAR_BETAS_32 = [
     3.89428309e-01, 4.02120007e-01, 4.14555722e-01, 4.26740457e-01,
     4.38679123e-01, 4.50376536e-01, 4.61837424e-01, 4.73066422e-01,
 ];
-//# sourceMappingURL=diffusion.js.map
