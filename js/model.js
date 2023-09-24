@@ -151,7 +151,7 @@ function readParamDict(url) {
         const stateDict = {};
         metadata.forEach((info) => {
             const [name, rawShape] = info;
-            const shape = Shape.from(rawShape);
+            const shape = Shape.make(...rawShape);
             const param = new Tensor(allData.slice(0, shape.numel()), shape, null);
             allData = allData.slice(shape.numel());
             stateDict[name] = param;

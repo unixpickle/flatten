@@ -1,8 +1,6 @@
 class Shape extends Array {
     static make(...args) {
-        const res = new Shape();
-        args.forEach((x) => res.push(x));
-        return res;
+        return Shape.from(args);
     }
     toString() {
         return "Shape(" + this.join(", ") + ")";
@@ -24,7 +22,7 @@ class Shape extends Array {
             if (numel % product !== 0) {
                 throw new Error("incompatible shape " + this + " for " + numel + " elements");
             }
-            const res = this.slice();
+            const res = this.copy();
             res[this.indexOf(-1)] = numel / product;
             return res;
         }
@@ -45,11 +43,11 @@ class Shape extends Array {
         }
         return [outerSize, midSize, innerSize];
     }
+    copy() {
+        return Shape.from(this);
+    }
     slice(...args) {
         return super.slice.apply(this, args);
-    }
-    static from(iterable) {
-        return Array.from.apply(this, [iterable]);
     }
 }
 class Tensor {
@@ -130,7 +128,7 @@ class Tensor {
                 }
             }
         }
-        const newShape = tensors[0].shape.slice();
+        const newShape = tensors[0].shape.copy();
         for (let i = 1; i < tensors.length; ++i) {
             newShape[axis] += tensors[i].shape[axis];
         }
@@ -316,7 +314,7 @@ class Tensor {
             throw new Error("invalid range");
         }
         const [outerSize, midSize, innerSize] = this.shape.sizesAroundAxis(axis);
-        const newShape = this.shape.slice();
+        const newShape = this.shape.copy();
         newShape[axis] = end - start;
         const result = Tensor.zeros(newShape);
         for (let i = 0; i < outerSize; ++i) {

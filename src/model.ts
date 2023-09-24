@@ -163,7 +163,7 @@ async function readParamDict(url: string): Promise<ParamDict> {
     const stateDict = {} as ParamDict;
     metadata.forEach((info: [string, number[]]) => {
         const [name, rawShape] = info;
-        const shape = Shape.from(rawShape);
+        const shape = Shape.make(...rawShape);
         const param = new Tensor(allData.slice(0, shape.numel()), shape, null);
         allData = allData.slice(shape.numel());
         stateDict[name] = param;
